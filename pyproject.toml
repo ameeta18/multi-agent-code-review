@@ -1,0 +1,24 @@
+[project]
+name = "multi-agent-code-review"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ameeta", email = "contact.ameeta@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pygithub>=2.9.1",
+]
+
+[project.scripts]
+multi-agent-code-review = "multi_agent_code_review.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

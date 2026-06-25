@@ -1,0 +1,23 @@
+name: PR Review Bot (self-test)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Run the review bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uv run --frozen multi-agent-code-review
