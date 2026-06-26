@@ -1,0 +1,1 @@
+"""Deterministic, pure-Python filters applied to specialist findings."""

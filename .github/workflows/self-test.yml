@@ -20,4 +20,5 @@ jobs:
       - name: Run the review bot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: uv run --frozen multi-agent-code-review
