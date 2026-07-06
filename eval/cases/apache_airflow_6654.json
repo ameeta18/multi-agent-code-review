@@ -1,0 +1,66 @@
+{
+  "repo": "apache/airflow",
+  "pr_number": 6654,
+  "url": "https://github.com/apache/airflow/pull/6654",
+  "diff": "diff --git a/airflow/sensors/base_sensor_operator.py b/airflow/sensors/base_sensor_operator.py\n--- a/airflow/sensors/base_sensor_operator.py\n+++ b/airflow/sensors/base_sensor_operator.py\n@@ -17,7 +17,7 @@\n # specific language governing permissions and limitations\n # under the License.\n \n-\n+import hashlib\n from datetime import timedelta\n from time import sleep\n from typing import Dict, Iterable\n@@ -58,6 +58,9 @@ class BaseSensorOperator(BaseOperator, SkipMixin):\n         quite long. The poke interval should be more than one minute to\n         prevent too much load on the scheduler.\n     :type mode: str\n+    :param exponential_backoff: allow progressive longer waits between\n+        pokes by using exponential backoff algorithm\n+    :type exponential_backoff: bool\n     \"\"\"\n     ui_color = '#e6f1f2'  # type: str\n     valid_modes = ['poke', 'reschedule']  # type: Iterable[str]\n@@ -68,13 +71,15 @@ def __init__(self,\n                  timeout: float = 60 * 60 * 24 * 7,\n                  soft_fail: bool = False,\n                  mode: str = 'poke',\n+                 exponential_backoff: bool = False,\n                  *args,\n                  **kwargs) -> None:\n         super().__init__(*args, **kwargs)\n         self.poke_interval = poke_interval\n         self.soft_fail = soft_fail\n         self.timeout = timeout\n         self.mode = mode\n+        self.exponential_backoff = exponential_backoff\n         self._validate_input_values()\n \n     def _validate_input_values(self) -> None:\n@@ -101,11 +106,13 @@ def poke(self, context: Dict) -> bool:\n \n     def execute(self, context: Dict) -> None:\n         started_at = timezone.utcnow()\n+        try_number = 1\n         if self.reschedule:\n             # If reschedule, use first start date of current try\n             task_reschedules = TaskReschedule.find_for_task_instance(context['ti'])\n             if task_reschedules:\n                 started_at = task_reschedules[0].start_date\n+                try_number = len(task_reschedules) + 1\n         while not self.poke(context):\n             if (timezone.utcnow() - started_at).total_seconds() > self.timeout:\n                 # If sensor is in soft fail mode but will be retried then\n@@ -118,10 +125,11 @@ def execute(self, context: Dict) -> None:\n                     raise AirflowSensorTimeout('Snap. Time is OUT.')\n             if self.reschedule:\n                 reschedule_date = timezone.utcnow() + timedelta(\n-                    seconds=self.poke_interval)\n+                    seconds=self._get_next_poke_interval(started_at, try_number))\n                 raise AirflowRescheduleException(reschedule_date)\n             else:\n-                sleep(self.poke_interval)\n+                sleep(self._get_next_poke_interval(started_at, try_number))\n+                try_number += 1\n         self.log.info(\"Success criteria met. Exiting.\")\n \n     def _do_skip_downstream_tasks(self, context: Dict) -> None:\n@@ -130,6 +138,32 @@ def _do_skip_downstream_tasks(self, context: Dict) -> None:\n         if downstream_tasks:\n             self.skip(context['dag_run'], context['ti'].execution_date, downstream_tasks)\n \n+    def _get_next_poke_interval(self, started_at, try_number):\n+        \"\"\"\n+        Using the similar logic which is used for exponential backoff retry delay for operators.\n+        \"\"\"\n+        if self.exponential_backoff:\n+            min_backoff = int(self.poke_interval * (2 ** (try_number - 2)))\n+            current_time = timezone.utcnow()\n+\n+            hash = int(hashlib.sha1(\"{}#{}#{}#{}\".format(self.dag_id,\n+                                                         self.task_id,\n+                                                         started_at,\n+                                                         try_number)\n+                                    .encode('utf-8')).hexdigest(), 16)\n+            modded_hash = min_backoff + hash % min_backoff\n+\n+            delay_backoff_in_seconds = min(\n+                modded_hash,\n+                timedelta.max.total_seconds() - 1\n+            )\n+            new_interval = min(self.timeout - int((current_time - started_at).total_seconds()),\n+                               delay_backoff_in_seconds)\n+            self.log.info(\"new {} interval is {}\".format(self.mode, new_interval))\n+            return new_interval\n+        else:\n+            return self.poke_interval\n+\n     @property\n     def reschedule(self):\n         return self.mode == 'reschedule'\ndiff --git a/tests/sensors/test_base_sensor.py b/tests/sensors/test_base_sensor.py\n--- a/tests/sensors/test_base_sensor.py\n+++ b/tests/sensors/test_base_sensor.py\n@@ -20,7 +20,7 @@\n import unittest\n from datetime import timedelta\n from time import sleep\n-from unittest.mock import Mock\n+from unittest.mock import Mock, patch\n \n from freezegun import freeze_time\n \n@@ -502,3 +502,36 @@ def test_sensor_with_invalid_timeout(self):\n             return_value=None,\n             poke_interval=10,\n             timeout=positive_timeout)\n+\n+    def test_sensor_with_exponential_backoff_off(self):\n+        sensor = self._make_sensor(\n+            return_value=None,\n+            poke_interval=5,\n+            timeout=60,\n+            exponential_backoff=False)\n+\n+        started_at = timezone.utcnow() - timedelta(seconds=10)\n+        self.assertEqual(sensor._get_next_poke_interval(started_at, 1), sensor.poke_interval)\n+        self.assertEqual(sensor._get_next_poke_interval(started_at, 2), sensor.poke_interval)\n+\n+    def test_sensor_with_exponential_backoff_on(self):\n+\n+        sensor = self._make_sensor(\n+            return_value=None,\n+            poke_interval=5,\n+            timeout=60,\n+            exponential_backoff=True)\n+\n+        with patch('airflow.utils.timezone.utcnow') as mock_utctime:\n+            mock_utctime.return_value = DEFAULT_DATE\n+\n+            started_at = timezone.utcnow() - timedelta(seconds=10)\n+            print(started_at)\n+\n+            interval1 = sensor._get_next_poke_interval(started_at, 1)\n+            interval2 = sensor._get_next_poke_interval(started_at, 2)\n+\n+            self.assertTrue(interval1 >= 0)\n+            self.assertTrue(interval1 <= sensor.poke_interval)\n+            self.assertTrue(interval2 >= sensor.poke_interval)\n+            self.assertTrue(interval2 > interval1)",
+  "labeled_issues": [
+    {
+      "file": "tests/sensors/test_base_sensor.py",
+      "line_start": 524,
+      "line_end": 529,
+      "importance": "must_fix",
+      "category": "test_coverage",
+      "description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "ashb",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 515,
+      "body": "I'd rather we had the exact values here in the tests - this feels like it's just running the code again, but not actually testing the behaviour."
+    },
+    {
+      "author": "ashb",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 529,
+      "body": "Here too."
+    },
+    {
+      "author": "msumit",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 515,
+      "body": "`sensor.poke_interval` is an exact value `5`. The test is to make sure that between diff tries, the output is not changing. "
+    },
+    {
+      "author": "msumit",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 529,
+      "body": "problem is that this method calculates sha1, which is based upon the started_at, which is relative to the current time. "
+    },
+    {
+      "author": "ashb",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 515,
+      "body": "Oh yes, this one is fine then."
+    },
+    {
+      "author": "ashb",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 529,
+      "body": "In which case use mocking to make `timezone.utcnow` return a known constant value in the tests.\r\n\r\nOr if the \"jitter\" caused by this is small then \r\n```\r\nself.assertGreaterThanEqual(interval1, 5)\r\nself.assertLessThanEqual(interval1, 5.5)\r\n\r\nself.assertGreaterThanEqual(interval2, 6)\r\nself.assertLessThanEqual(interval2, 7)\r\n```\r\n\r\nThose values are not right, but this is the sort of thing I'd like to see."
+    },
+    {
+      "author": "msumit",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 529,
+      "body": "mocked timezone"
+    },
+    {
+      "author": "ashb",
+      "file": "tests/sensors/test_base_sensor.py",
+      "line": 529,
+      "body": "You mocked the timezone, but didn't add the extra tests that I asked for. Please could you add them?"
+    }
+  ]
+}

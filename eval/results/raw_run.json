@@ -1,0 +1,602 @@
+{
+  "meta": {
+    "n_cases": 21,
+    "n_labels": 18,
+    "specialist_model": "gemini-2.5-flash",
+    "synthesizer_model": "gemini-2.5-flash",
+    "total_seconds": 319.1,
+    "n_errors": 0
+  },
+  "cases": [
+    {
+      "case_id": "apache_airflow_53597",
+      "repo": "apache/airflow",
+      "pr_number": 53597,
+      "n_labels": 1,
+      "n_findings": 3,
+      "latency_seconds": 15.3,
+      "error": null,
+      "labels": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 26,
+          "line_end": 26,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/common/headers.py",
+          "line_start": 88,
+          "line_end": 91,
+          "severity": "high",
+          "category": "test_coverage",
+          "title": "Untested error path for unsupported Content-Type",
+          "explanation": "The `header_content_type_json_or_form_depends` function raises an `HTTPException` with status `415 UNSUPPORTED_MEDIA_TYPE` if the `Content-Type` header is neither `application/json` nor `application/x-www-form-urlencoded`. This error path is not covered by existing tests."
+        },
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 34,
+          "line_end": 35,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Untested error path for LoginBody validation",
+          "explanation": "The `parse_login_body` function includes a `try...except ValidationError` block to catch issues when creating `LoginBody` from the request payload. This path, which re-raises as `RequestValidationError` (resulting in a `422 Unprocessable Entity` response), is not explicitly tested for malformed input."
+        },
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 28,
+          "line_end": 48,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Missing docstring for public function",
+          "explanation": "The public function `parse_login_body` is missing a docstring, which makes it harder to understand its purpose, arguments, and return value without reading the implementation."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "repo": "apache/airflow",
+      "pr_number": 59643,
+      "n_labels": 2,
+      "n_findings": 1,
+      "latency_seconds": 24.37,
+      "error": null,
+      "labels": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+          "line_start": 235,
+          "line_end": 241,
+          "importance": "must_fix",
+          "category": "security",
+          "description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead."
+        },
+        {
+          "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+          "line_start": 1027,
+          "line_end": 1033,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+          "line_start": 237,
+          "line_end": 237,
+          "severity": "high",
+          "category": "security",
+          "title": "Credential Exposure via Connection Test Endpoint",
+          "explanation": "The `test_connection` endpoint now allows users to specify an existing `connection_id` and override its properties with values from the request body. If a user provides an existing `connection_id` and changes the `conn_type` to a type that embeds credentials in its URI (e.g., `http`, `ftp`, `sftp`, `jdbc`, `mysql`, `postgres`, etc.) and sets the `host` to an attacker-controlled server, the actual credentials (login, password) of the existing connection will be retrieved from the secrets backend and included in the URI. When `conn.test_connection()` is called, it will attempt to connect to the attacker-controlled host using this URI, thereby exposing the sensitive credentials. The `update_orm_from_pydantic` function merges the `test_body` into the `existing_conn` object, allowing the `conn_type` and `host` to be changed while retaining the original sensitive fields like `login` and `password`."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "repo": "apache/airflow",
+      "pr_number": 63530,
+      "n_labels": 1,
+      "n_findings": 1,
+      "latency_seconds": 13.92,
+      "error": null,
+      "labels": [
+        {
+          "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+          "line_start": 346,
+          "line_end": 346,
+          "importance": "nice_to_have",
+          "category": "security",
+          "description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge."
+        }
+      ],
+      "findings": [
+        {
+          "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+          "line_start": 345,
+          "line_end": 346,
+          "severity": "high",
+          "category": "security",
+          "title": "Potential SQL Injection via direct string interpolation",
+          "explanation": "The `duplicate_key_handling` and `extra_options` parameters are directly interpolated into the SQL query string using an f-string. This bypasses the database driver's parameterization, making the `LOAD DATA LOCAL INFILE` statement vulnerable to SQL injection if these parameters contain untrusted input. An attacker could inject malicious SQL code, potentially leading to data manipulation or other unauthorized actions."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "repo": "apache/airflow",
+      "pr_number": 6654,
+      "n_labels": 1,
+      "n_findings": 3,
+      "latency_seconds": 27.55,
+      "error": null,
+      "labels": [
+        {
+          "file": "tests/sensors/test_base_sensor.py",
+          "line_start": 524,
+          "line_end": 529,
+          "importance": "must_fix",
+          "category": "test_coverage",
+          "description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 150,
+          "line_end": 150,
+          "severity": "critical",
+          "category": "test_coverage",
+          "title": "Potential ZeroDivisionError in exponential backoff calculation",
+          "explanation": "The calculation `hash % min_backoff` can raise a `ZeroDivisionError` if `min_backoff` evaluates to 0. `min_backoff` is derived from `int(self.poke_interval * (2 ** (try_number - 2)))`. If `self.poke_interval` is a small float (e.g., 0.5) and `try_number` is 1 or 2, `min_backoff` can become 0 after integer conversion, leading to a crash."
+        },
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 107,
+          "line_end": 124,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "`execute` method's exponential backoff progression needs direct testing",
+          "explanation": "The `execute` method's loop now uses `try_number` and `_get_next_poke_interval` to determine sleep/reschedule intervals. While `_get_next_poke_interval` is tested in isolation, the full interaction within the `execute` loop, including how `try_number` increments and affects the actual sleep/reschedule times, is not directly verified. This applies to both `poke` and `reschedule` modes when `exponential_backoff=True`."
+        },
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 138,
+          "line_end": 162,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "Potential duplicated logic for exponential backoff calculation",
+          "explanation": "The docstring for `_get_next_poke_interval` explicitly states 'Using the similar logic which is used for exponential backoff retry delay for operators.' If this logic is indeed a copy of existing code, it introduces duplication. Duplicated logic can lead to inconsistencies if one version is updated but the other is not, and increases maintenance overhead."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_17583",
+      "repo": "django/django",
+      "pr_number": 17583,
+      "n_labels": 2,
+      "n_findings": 1,
+      "latency_seconds": 26.01,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/db/models/base.py",
+          "line_start": 784,
+          "line_end": 784,
+          "importance": "must_fix",
+          "category": null,
+          "description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields."
+        },
+        {
+          "file": "tests/model_fields/models.py",
+          "line_start": 505,
+          "line_end": 505,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/db/models/base.py",
+          "line_start": 802,
+          "line_end": 810,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Model.save() behavior with only generated fields deferred",
+          "explanation": "The change modifies how `deferred_fields` are considered for automatic `update_fields` in `Model.save()`. If only generated fields are deferred, the `elif` block (lines 802-810) should be skipped, preventing an unnecessary `UPDATE` query. This specific scenario is not explicitly tested."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_17730",
+      "repo": "django/django",
+      "pr_number": 17730,
+      "n_labels": 1,
+      "n_findings": 5,
+      "latency_seconds": 17.61,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 501,
+          "line_end": 501,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 403,
+          "line_end": 403,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Untested early exit for empty replacements",
+          "explanation": "The `replace_expressions` method now includes an early exit if the `replacements` dictionary is empty. This specific branch should be tested."
+        },
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 406,
+          "line_end": 406,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Untested early exit for empty source expressions",
+          "explanation": "The `replace_expressions` method now includes an early exit if `get_source_expressions()` returns an empty or falsy value. This specific branch should be tested."
+        },
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 488,
+          "line_end": 498,
+          "severity": "high",
+          "category": "test_coverage",
+          "title": "New cached classproperty and modified identity logic untested",
+          "explanation": "A new `_constructor_signature` classproperty with `lru_cache` has been introduced, and the `identity` method's logic for obtaining and processing the constructor signature has changed, including skipping the `self` argument. This new caching mechanism and the modified argument processing need thorough testing to ensure correctness and cache behavior."
+        },
+        {
+          "file": "django/db/models/sql/query.py",
+          "line_start": 973,
+          "line_end": 973,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Untested early exit for empty change_map",
+          "explanation": "The `change_aliases` method now includes an early exit if the `change_map` dictionary is empty. This specific branch should be tested."
+        },
+        {
+          "file": "django/db/models/sql/where.py",
+          "line_start": 205,
+          "line_end": 205,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Untested early exit for empty change_map",
+          "explanation": "The `relabel_aliases` method now includes an early exit if the `change_map` dictionary is empty. This specific branch should be tested."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_18433",
+      "repo": "django/django",
+      "pr_number": 18433,
+      "n_labels": 0,
+      "n_findings": 0,
+      "latency_seconds": 8.81,
+      "error": null,
+      "labels": [],
+      "findings": []
+    },
+    {
+      "case_id": "django_django_21426",
+      "repo": "django/django",
+      "pr_number": 21426,
+      "n_labels": 1,
+      "n_findings": 0,
+      "latency_seconds": 10.85,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/core/cache/backends/db.py",
+          "line_start": 281,
+          "line_end": 282,
+          "importance": "must_fix",
+          "category": null,
+          "description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "case_id": "django_django_21438",
+      "repo": "django/django",
+      "pr_number": 21438,
+      "n_labels": 1,
+      "n_findings": 0,
+      "latency_seconds": 12.7,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/utils/http.py",
+          "line_start": 200,
+          "line_end": 208,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests)."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "case_id": "django_django_21448",
+      "repo": "django/django",
+      "pr_number": 21448,
+      "n_labels": 1,
+      "n_findings": 0,
+      "latency_seconds": 6.55,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/core/mail/message.py",
+          "line_start": 363,
+          "line_end": 368,
+          "importance": "must_fix",
+          "category": null,
+          "description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "repo": "encode/httpx",
+      "pr_number": 1349,
+      "n_labels": 1,
+      "n_findings": 1,
+      "latency_seconds": 13.41,
+      "error": null,
+      "labels": [
+        {
+          "file": "tests/models/test_url.py",
+          "line_start": 302,
+          "line_end": 304,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+        }
+      ],
+      "findings": [
+        {
+          "file": "httpx/_models.py",
+          "line_start": 111,
+          "line_end": 115,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "Duplicated IPv6 bracketing logic",
+          "explanation": "The logic to enclose an IPv6 address in square brackets if it's not already (`if host and \":\" in host and host[0] != \"[\"`) is duplicated in the `__init__` method and the `copy_with` method (lines 339-341)."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_1469",
+      "repo": "encode/httpx",
+      "pr_number": 1469,
+      "n_labels": 1,
+      "n_findings": 0,
+      "latency_seconds": 4.12,
+      "error": null,
+      "labels": [
+        {
+          "file": "httpx/_transports/wsgi.py",
+          "line_start": 77,
+          "line_end": 77,
+          "importance": "must_fix",
+          "category": null,
+          "description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "case_id": "encode_httpx_2911",
+      "repo": "encode/httpx",
+      "pr_number": 2911,
+      "n_labels": 0,
+      "n_findings": 1,
+      "latency_seconds": 31.41,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "tests/test_utils.py",
+          "line_start": 34,
+          "line_end": 42,
+          "severity": "high",
+          "category": "test_coverage",
+          "title": "test_encoded for UTF-16/32 without BOM is incorrect",
+          "explanation": "The `test_encoded` function currently asserts that `response.json()` can parse JSON content encoded in `utf-16-le`, `utf-16-be`, `utf-32-le`, and `utf-32-be` without a Byte Order Mark (BOM). However, the `Response.json()` method now directly passes `self.content` (bytes) to `json.loads()`. Python's `json.loads()` defaults to UTF-8 decoding when given bytes and does not automatically detect UTF-16 or UTF-32 encodings without a BOM. Therefore, these specific test cases should fail with a `json.JSONDecodeError`, indicating a regression in functionality compared to the previous implementation that used `guess_json_utf`. The current passing state of these tests is misleading."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_3460",
+      "repo": "encode/httpx",
+      "pr_number": 3460,
+      "n_labels": 0,
+      "n_findings": 0,
+      "latency_seconds": 2.87,
+      "error": null,
+      "labels": [],
+      "findings": []
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "repo": "encode/httpx",
+      "pr_number": 780,
+      "n_labels": 1,
+      "n_findings": 2,
+      "latency_seconds": 20.07,
+      "error": null,
+      "labels": [
+        {
+          "file": "httpx/config.py",
+          "line_start": 337,
+          "line_end": 338,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call."
+        }
+      ],
+      "findings": [
+        {
+          "file": "httpx/config.py",
+          "line_start": 327,
+          "line_end": 328,
+          "severity": "high",
+          "category": "test_coverage",
+          "title": "Proxy initialization with partial credentials from URL",
+          "explanation": "The `Proxy` class's `__init__` method calls `build_auth_header` with `url.username` and `url.password` directly. If `url.password` is `None` (e.g., for a proxy URL like `http://user@proxy_host`), `password.encode(\"utf-8\")` inside `build_auth_header` will raise an `AttributeError`. This represents an untested error path and a potential runtime crash."
+        },
+        {
+          "file": "httpx/config.py",
+          "line_start": 340,
+          "line_end": 343,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Missing docstring for public method",
+          "explanation": "The 'build_auth_header' method is a public method of the 'Proxy' class and should have a docstring explaining its purpose, arguments, and return value."
+        }
+      ]
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "repo": "home-assistant/core",
+      "pr_number": 88276,
+      "n_labels": 1,
+      "n_findings": 1,
+      "latency_seconds": 7.37,
+      "error": null,
+      "labels": [
+        {
+          "file": "homeassistant/components/calendar/__init__.py",
+          "line_start": 389,
+          "line_end": 390,
+          "importance": "must_fix",
+          "category": "test_coverage",
+          "description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "tests/components/calendar/test_init.py",
+          "line_start": 68,
+          "line_end": 80,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Unclear docstring",
+          "explanation": "The docstring for `test_events_http_api_dates_wrong_order` is generic ('Test the calendar demo view.') and does not clearly state the specific scenario being tested (start date after end date)."
+        }
+      ]
+    },
+    {
+      "case_id": "pydantic_pydantic_2532",
+      "repo": "pydantic/pydantic",
+      "pr_number": 2532,
+      "n_labels": 0,
+      "n_findings": 0,
+      "latency_seconds": 8.2,
+      "error": null,
+      "labels": [],
+      "findings": []
+    },
+    {
+      "case_id": "pydantic_pydantic_2536",
+      "repo": "pydantic/pydantic",
+      "pr_number": 2536,
+      "n_labels": 0,
+      "n_findings": 0,
+      "latency_seconds": 5.63,
+      "error": null,
+      "labels": [],
+      "findings": []
+    },
+    {
+      "case_id": "pydantic_pydantic_3542",
+      "repo": "pydantic/pydantic",
+      "pr_number": 3542,
+      "n_labels": 0,
+      "n_findings": 0,
+      "latency_seconds": 31.54,
+      "error": null,
+      "labels": [],
+      "findings": []
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_23299",
+      "repo": "scikit-learn/scikit-learn",
+      "pr_number": 23299,
+      "n_labels": 1,
+      "n_findings": 0,
+      "latency_seconds": 8.82,
+      "error": null,
+      "labels": [
+        {
+          "file": "sklearn/feature_selection/_from_model.py",
+          "line_start": 393,
+          "line_end": 393,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "repo": "scikit-learn/scikit-learn",
+      "pr_number": 33787,
+      "n_labels": 2,
+      "n_findings": 2,
+      "latency_seconds": 22.02,
+      "error": null,
+      "labels": [
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 1577,
+          "line_end": 1594,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication."
+        },
+        {
+          "file": "sklearn/tests/test_pipeline.py",
+          "line_start": 2605,
+          "line_end": 2634,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "Reviewer asked for additional test cases: callbacks set directly on steps without auto-propagation, without memory enabled, and exercising passthrough steps with non-empty callback lists. Tests were added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 679,
+          "line_end": 716,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Missing test coverage for Pipeline.fit_transform with callbacks",
+          "explanation": "The `fit_transform` method now integrates callback functionality, including conditional branches for the final estimator (passthrough, `fit_transform` method, or `fit().transform()` sequence). The existing tests primarily cover the `fit` method's callback behavior, leaving these specific `fit_transform` paths untested with callbacks."
+        },
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 621,
+          "line_end": 826,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "Duplicated callback handling for the final estimator",
+          "explanation": "The logic for initializing a subcontext, propagating callbacks, and calling `on_fit_task_begin` and `on_fit_task_end` for the final estimator (including the 'passthrough' case) is duplicated across the `fit`, `fit_transform`, and `fit_predict` methods. This increases code verbosity and makes future changes harder to maintain."
+        }
+      ]
+    }
+  ]
+}

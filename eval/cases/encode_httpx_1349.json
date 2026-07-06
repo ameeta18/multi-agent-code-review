@@ -1,0 +1,30 @@
+{
+  "repo": "encode/httpx",
+  "pr_number": 1349,
+  "url": "https://github.com/encode/httpx/pull/1349",
+  "diff": "diff --git a/httpx/_models.py b/httpx/_models.py\n--- a/httpx/_models.py\n+++ b/httpx/_models.py\n@@ -108,6 +108,11 @@ def __init__(\n                 raw_scheme, raw_host, port, raw_path = url\n                 scheme = raw_scheme.decode(\"ascii\")\n                 host = raw_host.decode(\"ascii\")\n+                if host and \":\" in host and host[0] != \"[\":\n+                    # it's an IPv6 address, so it should be enclosed in \"[\" and \"]\"\n+                    # ref: https://tools.ietf.org/html/rfc2732#section-2\n+                    # ref: https://tools.ietf.org/html/rfc3986#section-3.2.2\n+                    host = f\"[{host}]\"\n                 port_str = \"\" if port is None else f\":{port}\"\n                 path = raw_path.decode(\"ascii\")\n                 url = f\"{scheme}://{host}{port_str}{path}\"\n@@ -186,8 +191,17 @@ def host(self) -> str:\n \n         url = httpx.URL(\"http://\u4e2d\u56fd.icom.museum\")\n         assert url.host == \"xn--fiqs8s.icom.museum\"\n+\n+        url = httpx.URL(\"https://[::ffff:192.168.0.1]\")\n+        assert url.host == \"::ffff:192.168.0.1\"\n         \"\"\"\n-        return self._uri_reference.host or \"\"\n+        host: str = self._uri_reference.host\n+\n+        if host and \":\" in host and host[0] == \"[\":\n+            # it's an IPv6 address\n+            host = host.lstrip(\"[\").rstrip(\"]\")\n+\n+        return host or \"\"\n \n     @property\n     def port(self) -> typing.Optional[int]:\n@@ -336,6 +350,11 @@ def copy_with(self, **kwargs: typing.Any) -> \"URL\":\n             # Consolidate host and port into  netloc.\n             host = kwargs.pop(\"host\", self.host) or \"\"\n             port = kwargs.pop(\"port\", self.port)\n+\n+            if host and \":\" in host and host[0] != \"[\":\n+                # it's an IPv6 address, so it should be hidden under bracket\n+                host = f\"[{host}]\"\n+\n             kwargs[\"netloc\"] = f\"{host}:{port}\" if port is not None else host\n \n         if \"userinfo\" in kwargs or \"netloc\" in kwargs:\ndiff --git a/tests/models/test_url.py b/tests/models/test_url.py\n--- a/tests/models/test_url.py\n+++ b/tests/models/test_url.py\n@@ -287,3 +287,37 @@ def test_url_with_url_encoded_path():\n     assert url.path == \"/path to somewhere\"\n     assert url.query == b\"\"\n     assert url.raw_path == b\"/path%20to%20somewhere\"\n+\n+\n+def test_ipv6_url():\n+    url = httpx.URL(\"http://[::ffff:192.168.0.1]:5678/\")\n+\n+    assert url.host == \"::ffff:192.168.0.1\"\n+    assert url.netloc == \"[::ffff:192.168.0.1]:5678\"\n+\n+\n+@pytest.mark.parametrize(\n+    \"url_str\",\n+    [\n+        \"http://127.0.0.1:1234\",\n+        \"http://example.com:1234\",\n+        \"http://[::ffff:127.0.0.1]:1234\",\n+    ],\n+)\n+@pytest.mark.parametrize(\"new_host\", [\"[::ffff:192.168.0.1]\", \"::ffff:192.168.0.1\"])\n+def test_ipv6_url_copy_with_host(url_str, new_host):\n+    url = httpx.URL(url_str).copy_with(host=new_host)\n+\n+    assert url.host == \"::ffff:192.168.0.1\"\n+    assert url.netloc == \"[::ffff:192.168.0.1]:1234\"\n+    assert str(url) == \"http://[::ffff:192.168.0.1]:1234\"\n+\n+\n+@pytest.mark.parametrize(\"host\", [b\"[::ffff:192.168.0.1]\", b\"::ffff:192.168.0.1\"])\n+def test_ipv6_url_from_raw_url(host):\n+    raw_url = (b\"https\", host, 443, b\"/\")\n+    url = httpx.URL(raw_url)\n+\n+    assert url.host == \"::ffff:192.168.0.1\"\n+    assert url.netloc == \"[::ffff:192.168.0.1]:443\"\n+    assert str(url) == \"https://[::ffff:192.168.0.1]:443/\"",
+  "labeled_issues": [
+    {
+      "file": "tests/models/test_url.py",
+      "line_start": 302,
+      "line_end": 304,
+      "importance": "nice_to_have",
+      "category": "test_coverage",
+      "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "cdeler",
+      "file": "tests/models/test_url.py",
+      "line": 302,
+      "body": "The test with this parameter doesn't make sense.\r\n```suggestion\r\n        \"http://127.0.0.1:1234\",\r\n```"
+    },
+    {
+      "author": "cdeler",
+      "file": "tests/models/test_url.py",
+      "line": 304,
+      "body": "Change this host as the above\r\n```suggestion\r\n        \"http://[::ffff:127.0.0.1]:1234\",\r\n```"
+    }
+  ]
+}

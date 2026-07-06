@@ -1,0 +1,84 @@
+{
+  "repo": "scikit-learn/scikit-learn",
+  "pr_number": 23299,
+  "url": "https://github.com/scikit-learn/scikit-learn/pull/23299",
+  "diff": "diff --git a/doc/whats_new/v1.2.rst b/doc/whats_new/v1.2.rst\n--- a/doc/whats_new/v1.2.rst\n+++ b/doc/whats_new/v1.2.rst\n@@ -58,6 +58,13 @@ Changelog\n   :pr:`10468` by :user:`Ruben <icfly2>` and :pr:`22993` by\n   :user:`Jovan Stojanovic <jovan-stojanovic>`.\n \n+:mod:`sklearn.feature_selection`\n+................................\n+\n+- |Fix| The `partial_fit` method of :class:`feature_selection.SelectFromModel`\n+  now conducts validation for `max_features` and `feature_names_in` parameters.\n+  :pr:`23299` by :user:`Long Bao <lorentzbao>`.\n+\n Code and Documentation Contributors\n -----------------------------------\n \ndiff --git a/sklearn/feature_selection/_from_model.py b/sklearn/feature_selection/_from_model.py\n--- a/sklearn/feature_selection/_from_model.py\n+++ b/sklearn/feature_selection/_from_model.py\n@@ -10,11 +10,10 @@\n from ._base import _get_feature_importances\n from ..base import BaseEstimator, clone, MetaEstimatorMixin\n from ..utils._tags import _safe_tags\n-from ..utils.validation import check_is_fitted\n+from ..utils.validation import check_is_fitted, check_scalar, _num_features\n \n from ..exceptions import NotFittedError\n from ..utils.metaestimators import available_if\n-from ..utils.validation import check_scalar\n \n \n def _calculate_threshold(estimator, importances, threshold):\n@@ -287,34 +286,17 @@ def _get_support_mask(self):\n         mask[scores < threshold] = False\n         return mask\n \n-    def fit(self, X, y=None, **fit_params):\n-        \"\"\"Fit the SelectFromModel meta-transformer.\n-\n-        Parameters\n-        ----------\n-        X : array-like of shape (n_samples, n_features)\n-            The training input samples.\n-\n-        y : array-like of shape (n_samples,), default=None\n-            The target values (integers that correspond to classes in\n-            classification, real numbers in regression).\n-\n-        **fit_params : dict\n-            Other estimator specific parameters.\n-\n-        Returns\n-        -------\n-        self : object\n-            Fitted estimator.\n-        \"\"\"\n+    def _check_max_features(self, X):\n         if self.max_features is not None:\n+            n_features = _num_features(X)\n+\n             if isinstance(self.max_features, numbers.Integral):\n                 check_scalar(\n                     self.max_features,\n                     \"max_features\",\n                     numbers.Integral,\n                     min_val=0,\n-                    max_val=len(X[0]),\n+                    max_val=n_features,\n                 )\n                 self.max_features_ = self.max_features\n             elif callable(self.max_features):\n@@ -324,7 +306,7 @@ def fit(self, X, y=None, **fit_params):\n                     \"max_features(X)\",\n                     numbers.Integral,\n                     min_val=0,\n-                    max_val=len(X[0]),\n+                    max_val=n_features,\n                 )\n                 self.max_features_ = max_features\n             else:\n@@ -333,6 +315,28 @@ def fit(self, X, y=None, **fit_params):\n                     f\" 'X' as input. Got {self.max_features} instead.\"\n                 )\n \n+    def fit(self, X, y=None, **fit_params):\n+        \"\"\"Fit the SelectFromModel meta-transformer.\n+\n+        Parameters\n+        ----------\n+        X : array-like of shape (n_samples, n_features)\n+            The training input samples.\n+\n+        y : array-like of shape (n_samples,), default=None\n+            The target values (integers that correspond to classes in\n+            classification, real numbers in regression).\n+\n+        **fit_params : dict\n+            Other estimator specific parameters.\n+\n+        Returns\n+        -------\n+        self : object\n+            Fitted estimator.\n+        \"\"\"\n+        self._check_max_features(X)\n+\n         if self.prefit:\n             try:\n                 check_is_fitted(self.estimator)\n@@ -385,6 +389,8 @@ def partial_fit(self, X, y=None, **fit_params):\n         self : object\n             Fitted estimator.\n         \"\"\"\n+        self._check_max_features(X)\n+\n         if self.prefit:\n             if not hasattr(self, \"estimator_\"):\n                 try:\n@@ -397,9 +403,16 @@ def partial_fit(self, X, y=None, **fit_params):\n                 self.estimator_ = deepcopy(self.estimator)\n             return self\n \n-        if not hasattr(self, \"estimator_\"):\n+        first_call = not hasattr(self, \"estimator_\")\n+        if first_call:\n             self.estimator_ = clone(self.estimator)\n         self.estimator_.partial_fit(X, y, **fit_params)\n+\n+        if hasattr(self.estimator_, \"feature_names_in_\"):\n+            self.feature_names_in_ = self.estimator_.feature_names_in_\n+        else:\n+            self._check_feature_names(X, reset=first_call)\n+\n         return self\n \n     @property\ndiff --git a/sklearn/feature_selection/tests/test_from_model.py b/sklearn/feature_selection/tests/test_from_model.py\n--- a/sklearn/feature_selection/tests/test_from_model.py\n+++ b/sklearn/feature_selection/tests/test_from_model.py\n@@ -607,3 +607,40 @@ def importance_getter(estimator):\n         warnings.simplefilter(\"error\", UserWarning)\n \n         selector.transform(X.iloc[1:3])\n+\n+\n+@pytest.mark.parametrize(\n+    \"error, err_msg, max_features\",\n+    (\n+        [ValueError, \"max_features == 10, must be <= 4\", 10],\n+        [TypeError, \"'max_features' must be either an int or a callable\", \"a\"],\n+        [ValueError, r\"max_features\\(X\\) == 5, must be <= 4\", lambda x: x.shape[1] + 1],\n+    ),\n+)\n+def test_partial_fit_validate_max_features(error, err_msg, max_features):\n+    \"\"\"Test that partial_fit from SelectFromModel validates `max_features`.\"\"\"\n+    X, y = datasets.make_classification(\n+        n_samples=100,\n+        n_features=4,\n+        random_state=0,\n+    )\n+\n+    with pytest.raises(error, match=err_msg):\n+        SelectFromModel(\n+            estimator=SGDClassifier(), max_features=max_features\n+        ).partial_fit(X, y, classes=[0, 1])\n+\n+\n+@pytest.mark.parametrize(\"as_frame\", [True, False])\n+def test_partial_fit_validate_feature_names(as_frame):\n+    \"\"\"Test that partial_fit from SelectFromModel validates `feature_names_in_`.\"\"\"\n+    pytest.importorskip(\"pandas\")\n+    X, y = datasets.load_iris(as_frame=as_frame, return_X_y=True)\n+\n+    selector = SelectFromModel(estimator=SGDClassifier(), max_features=4).partial_fit(\n+        X, y, classes=[0, 1, 2]\n+    )\n+    if as_frame:\n+        assert_array_equal(selector.feature_names_in_, X.columns)\n+    else:\n+        assert not hasattr(selector, \"feature_names_in_\")\ndiff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py\n--- a/sklearn/utils/estimator_checks.py\n+++ b/sklearn/utils/estimator_checks.py\n@@ -31,6 +31,7 @@\n from ..linear_model import LogisticRegression\n from ..linear_model import RANSACRegressor\n from ..linear_model import Ridge\n+from ..linear_model import SGDRegressor\n \n from ..base import (\n     clone,\n@@ -44,6 +45,7 @@\n from ..metrics import accuracy_score, adjusted_rand_score, f1_score\n from ..random_projection import BaseRandomProjection\n from ..feature_selection import SelectKBest\n+from ..feature_selection import SelectFromModel\n from ..pipeline import make_pipeline\n from ..exceptions import DataConversionWarning\n from ..exceptions import NotFittedError\n@@ -389,6 +391,9 @@ def _construct_instance(Estimator):\n                 estimator = Estimator(LinearRegression())\n             elif issubclass(Estimator, RegressorMixin):\n                 estimator = Estimator(Ridge())\n+            elif issubclass(Estimator, SelectFromModel):\n+                # Increases coverage because SGDRegressor has partial_fit\n+                estimator = Estimator(SGDRegressor(random_state=0))\n             else:\n                 estimator = Estimator(LogisticRegression(C=1))\n         elif required_parameters in ([\"estimators\"],):",
+  "labeled_issues": [
+    {
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line_start": 393,
+      "line_end": 393,
+      "importance": "nice_to_have",
+      "category": "maintainability",
+      "description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated."
+    }
+],
+  "reviewer_comments": [
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 393,
+      "body": "To avoid code duplication, we can move the checking logic into a `_check_parameters(self, X)`, so it can be called in both `fit` and `partial_fit`."
+    },
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 395,
+      "body": "There is a `_num_features` utility function that you can use:\r\n\r\nhttps://github.com/scikit-learn/scikit-learn/blob/be38c959ea4b963ced30d0c08061438fc8edd6d2/sklearn/utils/validation.py#L257"
+    },
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/feature_selection/tests/test_from_model.py",
+      "line": 634,
+      "body": "We do not need this test, because it handled by the common test:\r\n\r\n```bash\r\npytest sklearn/tests/test_common.py::test_pandas_column_name_consistency -k SelectFromModel -v\r\n```\r\n\r\nThe test passed before this PR, because `SelectFromModel` was delegating the feature names check to the `estimator_`."
+    },
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 443,
+      "body": "During the first call to `partial_fit`, `feature_names_in_` is set set. In the second, third, etc, calls,  we need to validate the names.\r\n\r\n```python\r\nfirst_call = not hasattr(self, \"estimator_\")\r\nif first_call:\r\n    self.estimator_ = clone(self.estimator)\r\n\r\nself.estimator_.partial_fit(X, y, **fit_params)\r\n\r\nif hasattr(self.estimator_, \"feature_names_in_\"):\r\n    self.feature_names_in_ = self.estimator_.feature_names_in_\r\nelse:\r\n    self._check_feature_names(X, reset=first_call)\r\n```"
+    },
+    {
+      "author": "lorentzbao",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 393,
+      "body": "Thanks for your review @thomasjpfan. I will create a separate method to avoid duplication."
+    },
+    {
+      "author": "lorentzbao",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 395,
+      "body": "Thanks @thomasjpfan. Good to know we have a handy utility function returning the number of features. I will use this function instead."
+    },
+    {
+      "author": "lorentzbao",
+      "file": "sklearn/feature_selection/_from_model.py",
+      "line": 443,
+      "body": "Thanks@thomasjpfan. I will adopt this suggestion to the code."
+    },
+    {
+      "author": "lorentzbao",
+      "file": "sklearn/feature_selection/tests/test_from_model.py",
+      "line": 634,
+      "body": "Thanks @thomasjpfan. After a bit of investigation, I found that currently `test_pandas_column_name_consistency` doesn't cover `partial_fit` method in `SelectFromModel`, because  `SelectFromModel` is tested using `LogisticRegression(C=1)` estimator which has no `partial_fit` method.  \r\n\r\nI have tried to test `SelectFromModel` using `SGDRegressor` estimator instead in `test_common.py` as follows, but it broke several test cases.  So, I still think having a separate test in `test_from_model.py` . What do you think?\r\n```python\r\ndef _construct_instance(Estimator):\r\n    \"\"\"Construct Estimator instance if possible.\"\"\"\r\n    required_parameters = getattr(Estimator, \"_required_parameters\", [])\r\n    if len(required_parameters):\r\n        if required_parameters in ([\"estimator\"], [\"base_estimator\"]):\r\n            # `RANSACRegressor` will raise an error with any model other\r\n            # than `LinearRegression` if we don't fix `min_samples` parameter.\r\n            # For common test, we can enforce using `LinearRegression` that\r\n            # is the default estimator in `RANSACRegressor` instead of `Ridge`.\r\n            if issubclass(Estimator, RANSACRegressor):\r\n                estimator = Estimator(LinearRegression())\r\n            elif issubclass(Estimator, RegressorMixin):\r\n                estimator = Estimator(Ridge())\r\n            elif issubclass(Estimator, SelectFromModel):\r\n                estimator = Estimator(SGDRegressor())\r\n            else:\r\n                estimator = Estimator(LogisticRegression(C=1))\r\n```"
+    },
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/feature_selection/tests/test_from_model.py",
+      "line": 634,
+      "body": "Good point. The common test failed because of the randomness of `SGDRegressor`. A quick fix is:\r\n\r\n```python\r\nelif issubclass(Estimator, SelectFromModel):\r\n    # Increases coverage because SGDRegressor has partial_fit\r\n    estimator = Estimator(SGDRegressor(random_state=0))\r\n```\r\n\r\nThat being said, I think the current `test_partial_fit_validate_feature_names` is good to keep because it covers the case where `estimator_` is a classifier."
+    },
+    {
+      "author": "lorentzbao",
+      "file": "sklearn/feature_selection/tests/test_from_model.py",
+      "line": 634,
+      "body": "Thanks again. I have updated the common test while keeping the current `test_partial_fit_validate_feature_names`."
+    },
+    {
+      "author": "thomasjpfan",
+      "file": "sklearn/utils/estimator_checks.py",
+      "line": 395,
+      "body": "Let's include a comment so future contributors know why we need this:\r\n\r\n```suggestion\r\n            elif issubclass(Estimator, SelectFromModel):\r\n                # Increases coverage because SGDRegressor has partial_fit\r\n                estimator = Estimator(SGDRegressor(random_state=0))\r\n```"
+    }
+  ]
+}

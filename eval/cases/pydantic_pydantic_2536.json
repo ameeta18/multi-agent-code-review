@@ -1,0 +1,45 @@
+{
+  "repo": "pydantic/pydantic",
+  "pr_number": 2536,
+  "url": "https://github.com/pydantic/pydantic/pull/2536",
+  "diff": "diff --git a/changes/2536-PrettyWood.md b/changes/2536-PrettyWood.md\n--- a/changes/2536-PrettyWood.md\n+++ b/changes/2536-PrettyWood.md\n@@ -0,0 +1 @@\n+fix JSON schema generation with a `Literal` of an enum member\ndiff --git a/pydantic/schema.py b/pydantic/schema.py\n--- a/pydantic/schema.py\n+++ b/pydantic/schema.py\n@@ -794,6 +794,7 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)\n     f_schema: Dict[str, Any] = {}\n     if field.field_info is not None and field.field_info.const:\n         f_schema['const'] = field.default\n+\n     if is_literal_type(field_type):\n         values = all_literal_values(field_type)\n \n@@ -810,8 +811,8 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)\n         # All values have the same type\n         field_type = values[0].__class__\n         f_schema['enum'] = list(values)\n-\n-    if lenient_issubclass(field_type, Enum):\n+        add_field_type_to_schema(field_type, f_schema)\n+    elif lenient_issubclass(field_type, Enum):\n         enum_name = model_name_map[field_type]\n         f_schema, schema_overrides = get_field_info_schema(field)\n         f_schema.update(get_schema_ref(enum_name, ref_prefix, ref_template, schema_overrides))\ndiff --git a/tests/test_schema.py b/tests/test_schema.py\n--- a/tests/test_schema.py\n+++ b/tests/test_schema.py\n@@ -1784,6 +1784,22 @@ class Model(BaseModel):\n     }\n \n \n+def test_literal_enum():\n+    class MyEnum(str, Enum):\n+        FOO = 'foo'\n+        BAR = 'bar'\n+\n+    class Model(BaseModel):\n+        kind: Literal[MyEnum.FOO]\n+\n+    assert Model.schema() == {\n+        'title': 'Model',\n+        'type': 'object',\n+        'properties': {'kind': {'title': 'Kind', 'enum': ['foo'], 'type': 'string'}},\n+        'required': ['kind'],\n+    }\n+\n+\n def test_color_type():\n     class Model(BaseModel):\n         color: Color",
+  "labeled_issues": [],
+  "reviewer_comments": [
+    {
+      "author": "Kilo59",
+      "file": "pydantic/schema.py",
+      "line": 797,
+      "body": "Did you mean to add this whitespace change?"
+    },
+    {
+      "author": "Kilo59",
+      "file": "tests/test_schema.py",
+      "line": 1801,
+      "body": "Should we also test `Model.json_schema()`?"
+    },
+    {
+      "author": "Kilo59",
+      "file": "pydantic/schema.py",
+      "line": 814,
+      "body": "```suggestion\r\n        add_field_type_to_schema(field_type, f_schema)\r\n        \r\n```\r\nMaybe preserve the pre-existing whitespace separating the `if` & the `elif` logic"
+    },
+    {
+      "author": "PrettyWood",
+      "file": "pydantic/schema.py",
+      "line": 797,
+      "body": "Yes. To have the whole block with all the `elif`"
+    },
+    {
+      "author": "PrettyWood",
+      "file": "pydantic/schema.py",
+      "line": 814,
+      "body": "I don't agree since the whole block with all the elif is consistent. But it's subjective :)"
+    },
+    {
+      "author": "PrettyWood",
+      "file": "tests/test_schema.py",
+      "line": 1801,
+      "body": "IMO no need. It's just the json dump of the dict. Most cases test only `schema()` for this reason"
+    }
+  ]
+}

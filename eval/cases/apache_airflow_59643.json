@@ -1,0 +1,122 @@
+{
+  "repo": "apache/airflow",
+  "pr_number": 59643,
+  "url": "https://github.com/apache/airflow/pull/59643",
+  "diff": "diff --git a/airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py b/airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py\n--- a/airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py\n+++ b/airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py\n@@ -54,6 +54,7 @@\n )\n from airflow.api_fastapi.logging.decorators import action_logging\n from airflow.configuration import conf\n+from airflow.exceptions import AirflowNotFoundException\n from airflow.models import Connection\n from airflow.secrets.environment_variables import CONN_ENV_PREFIX\n from airflow.utils.db import create_default_connections as db_create_default_connections\n@@ -212,9 +213,7 @@ def patch_connection(\n \n \n @connections_router.post(\"/test\", dependencies=[Depends(requires_access_connection(method=\"POST\"))])\n-def test_connection(\n-    test_body: ConnectionBody,\n-) -> ConnectionTestResponse:\n+def test_connection(test_body: ConnectionBody) -> ConnectionTestResponse:\n     \"\"\"\n     Test an API connection.\n \n@@ -232,9 +231,17 @@ def test_connection(\n     transient_conn_id = get_random_string()\n     conn_env_var = f\"{CONN_ENV_PREFIX}{transient_conn_id.upper()}\"\n     try:\n-        data = test_body.model_dump(by_alias=True)\n-        data[\"conn_id\"] = transient_conn_id\n-        conn = Connection(**data)\n+        # Try to get existing connection and merge with provided values\n+        try:\n+            existing_conn = Connection.get_connection_from_secrets(test_body.connection_id)\n+            existing_conn.conn_id = transient_conn_id\n+            update_orm_from_pydantic(existing_conn, test_body)\n+            conn = existing_conn\n+        except AirflowNotFoundException:\n+            data = test_body.model_dump(by_alias=True)\n+            data[\"conn_id\"] = transient_conn_id\n+            conn = Connection(**data)\n+\n         os.environ[conn_env_var] = conn.get_uri()\n         test_status, test_message = conn.test_connection()\n         return ConnectionTestResponse.model_validate({\"status\": test_status, \"message\": test_message})\ndiff --git a/airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py b/airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py\n--- a/airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py\n+++ b/airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py\n@@ -16,12 +16,13 @@\n # under the License.\n from __future__ import annotations\n \n+import json\n import os\n from importlib.metadata import PackageNotFoundError, metadata\n from unittest import mock\n \n import pytest\n-from sqlalchemy import select\n+from sqlalchemy import func, select\n from sqlalchemy.orm import Session\n \n from airflow.models import Connection\n@@ -1001,6 +1002,140 @@ def test_should_respond_403_by_default(self, test_client, body):\n             \"Contact your deployment admin to enable it.\"\n         }\n \n+    @mock.patch.dict(os.environ, {\"AIRFLOW__CORE__TEST_CONNECTION\": \"Enabled\"})\n+    def test_should_merge_password_with_existing_connection(self, test_client, session):\n+        connection = Connection(\n+            conn_id=TEST_CONN_ID,\n+            conn_type=\"sqlite\",\n+            password=\"existing_password\",\n+        )\n+        session.add(connection)\n+        session.commit()\n+        initial_count = session.scalar(select(func.count()).select_from(Connection))\n+\n+        captured_value = {}\n+\n+        def mock_test_connection(self):\n+            captured_value[\"password\"] = self.password\n+            captured_value[\"conn_type\"] = self.conn_type\n+            return True, \"mocked\"\n+\n+        body = {\n+            \"connection_id\": TEST_CONN_ID,\n+            \"conn_type\": \"new_sqlite\",\n+            \"password\": \"***\",\n+        }\n+\n+        with mock.patch.object(Connection, \"test_connection\", mock_test_connection):\n+            response = test_client.post(\"/connections/test\", json=body)\n+\n+        assert response.status_code == 200\n+        assert response.json()[\"status\"] is True\n+        # Verify that the existing password was used, not \"***\"\n+        assert captured_value[\"password\"] == \"existing_password\"\n+        # Verify that payload info were used for other fields\n+        assert captured_value[\"conn_type\"] == \"new_sqlite\"\n+\n+        # Verify DB was not mutated\n+        session.expire_all()\n+        db_conn = session.scalar(select(Connection).filter_by(conn_id=TEST_CONN_ID))\n+        assert db_conn.password == \"existing_password\"\n+        assert session.scalar(select(func.count()).select_from(Connection)) == initial_count\n+\n+    @mock.patch.dict(os.environ, {\"AIRFLOW__CORE__TEST_CONNECTION\": \"Enabled\"})\n+    def test_should_merge_extra_with_existing_connection(self, test_client, session):\n+        connection = Connection(\n+            conn_id=TEST_CONN_ID,\n+            conn_type=\"fs\",\n+            extra='{\"path\": \"/\", \"existing_key\": \"existing_value\"}',\n+        )\n+        session.add(connection)\n+        session.commit()\n+        initial_count = session.scalar(select(func.count()).select_from(Connection))\n+\n+        captured_extra = {}\n+\n+        def mock_test_connection(self):\n+            captured_extra[\"value\"] = self.extra\n+            return True, \"mocked\"\n+\n+        body = {\n+            \"connection_id\": TEST_CONN_ID,\n+            \"conn_type\": \"fs\",\n+            \"extra\": '{\"path\": \"/\", \"new_key\": \"new_value\"}',\n+        }\n+\n+        with mock.patch.object(Connection, \"test_connection\", mock_test_connection):\n+            response = test_client.post(\"/connections/test\", json=body)\n+\n+        assert response.status_code == 200\n+        assert response.json()[\"status\"] is True\n+        # Verify that new_key is reflected in the merged extra\n+        merged_extra = json.loads(captured_extra[\"value\"])\n+        assert merged_extra[\"new_key\"] == \"new_value\"\n+        assert merged_extra[\"path\"] == \"/\"\n+\n+        # Verify DB was not mutated\n+        session.expire_all()\n+        db_conn = session.scalar(select(Connection).filter_by(conn_id=TEST_CONN_ID))\n+        assert json.loads(db_conn.extra) == {\"path\": \"/\", \"existing_key\": \"existing_value\"}\n+        assert session.scalar(select(func.count()).select_from(Connection)) == initial_count\n+\n+    @mock.patch.dict(os.environ, {\"AIRFLOW__CORE__TEST_CONNECTION\": \"Enabled\"})\n+    def test_should_merge_both_password_and_extra(self, test_client, session):\n+        connection = Connection(\n+            conn_id=TEST_CONN_ID,\n+            conn_type=\"fs\",\n+            password=\"existing_password\",\n+            extra='{\"path\": \"/\", \"existing_key\": \"existing_value\"}',\n+        )\n+        session.add(connection)\n+        session.commit()\n+        initial_count = session.scalar(select(func.count()).select_from(Connection))\n+\n+        captured_values = {}\n+\n+        def mock_test_connection(self):\n+            captured_values[\"password\"] = self.password\n+            captured_values[\"extra\"] = self.extra\n+            return True, \"mocked\"\n+\n+        body = {\n+            \"connection_id\": TEST_CONN_ID,\n+            \"conn_type\": \"fs\",\n+            \"password\": \"***\",\n+            \"extra\": '{\"path\": \"/\", \"new_key\": \"new_value\"}',\n+        }\n+\n+        with mock.patch.object(Connection, \"test_connection\", mock_test_connection):\n+            response = test_client.post(\"/connections/test\", json=body)\n+\n+        assert response.status_code == 200\n+        assert response.json()[\"status\"] is True\n+        # Verify that the existing password was used, not \"***\"\n+        assert captured_values[\"password\"] == \"existing_password\"\n+        # Verify that new_key is reflected in the merged extra\n+        merged_extra = json.loads(captured_values[\"extra\"])\n+        assert merged_extra[\"new_key\"] == \"new_value\"\n+        assert merged_extra[\"path\"] == \"/\"\n+\n+        # Verify DB was not mutated\n+        session.expire_all()\n+        db_conn = session.scalar(select(Connection).filter_by(conn_id=TEST_CONN_ID))\n+        assert db_conn.password == \"existing_password\"\n+        assert json.loads(db_conn.extra) == {\"path\": \"/\", \"existing_key\": \"existing_value\"}\n+        assert session.scalar(select(func.count()).select_from(Connection)) == initial_count\n+\n+    @mock.patch.dict(os.environ, {\"AIRFLOW__CORE__TEST_CONNECTION\": \"Enabled\"})\n+    def test_should_test_new_connection_without_existing(self, test_client):\n+        body = {\n+            \"connection_id\": \"non_existent_conn\",\n+            \"conn_type\": \"sqlite\",\n+        }\n+        response = test_client.post(\"/connections/test\", json=body)\n+        assert response.status_code == 200\n+        assert response.json()[\"status\"] is True\n+\n \n class TestCreateDefaultConnections(TestConnectionEndpoint):\n     def test_should_respond_204(self, test_client, session):",
+  "labeled_issues": [
+    {
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line_start": 235,
+      "line_end": 241,
+      "importance": "must_fix",
+      "category": "security",
+      "description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead."
+    },
+    {
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line_start": 1027,
+      "line_end": 1033,
+      "importance": "nice_to_have",
+      "category": "test_coverage",
+      "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "potiuk",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 241,
+      "body": "Should not we use `Connection.get_connection_from_secrets` ? -> this is the \"canonical\" (even if badly named) way of retrieving connection. We should not read the connections directly from the database, because the connections might be defined in secrets?\n\nSurely you won't be able to test those \"secret backends only\" connections via UI, but since this is an API call, it should still handle running \"/test\" API with the conn_id that is defined in secrets."
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 241,
+      "body": "Thanks for catching this, I missed it.\nThis approach seems more appropriate than reading the connection directly from the database."
+    },
+    {
+      "author": "jason810496",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 244,
+      "body": "Not sure would it be better to introduce a new query parameter to distinguish whether to use credentials from  the existed connection?\n\nOr maybe we could change the Frontend that only passing `connection_id` and `conn_type`, and the Backend will only fill-up the credentials if `password` and `extra` are unset?\n\nSince there might be user directly call public API with the existed `connection_id`, but they want to test the credentials provided by API instead of existed credentials in the DB / Secret."
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 244,
+      "body": "I agree that if an API user provides both `connection_id` and `password`, the current behavior may not match what the user expects. Thanks for find this!\r\nI\u2019m currently thinking about how to resolve this, but it\u2019s starting to feel a bit complex as more conditions are added\ud83d\ude22\r\n\r\nI think I\u2019ll need to take a closer look later this evening. Understanding the secrets backend also feels somewhat complex, so it may take a bit more time."
+    },
+    {
+      "author": "uranusjr",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/openapi/v2-rest-api-generated.yaml",
+      "line": 1637,
+      "body": "Instead of doing escapes everywhere, use one of the multiline syntaxes. https://yaml-multiline.info/"
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/openapi/v2-rest-api-generated.yaml",
+      "line": 1637,
+      "body": "Oops! Thanks:)"
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 249,
+      "body": "The API operates for now only on DB connections (delete, patch, etc...). I would keep it consistent and only do a 'db' call there to keep things simple. \n\nThen if we want to be able to do  a secret backend lookup, I would do that in a follow up PR if needed. "
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 249,
+      "body": "As I understand it, for now it would be better to keep the API limited to DB connections only to maintain consistency.\r\nIn that case, would it make more sense to change it to a direct DB lookup like below, as I tried previously?\r\n```py\r\nexisting_orm_conn = session.scalar(\r\n    select(Connection).where(Connection.conn_id == test_body.connection_id).limit(1)\r\n)\r\n```"
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+      "line": 249,
+      "body": "I was suggesting that in my previous comment, but I realized that `get_connection_from_secrets` already returns an orm instance, so it will not be a big effort to support private backend connection too. We can keep the `get_connection_from_secrets` to allow testing all connections, just get rid of `use_existing_credentials`, use the utility method to merge the object, test the connection, and discard the merged orm object before returning."
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 997,
+      "body": "Why is that needed. By default this is \"Disabled\", you shouldn't need that.\n\nProbably a local conf or something interfering with the tests, your change doesn't seem to impact this."
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 1027,
+      "body": "How does this test that the password used is actually \"existing_password\" and not \"***\" when performing the `conn.test_connection` ?"
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 1066,
+      "body": "Same here, how do we now the \"new_key\" is taken into account?"
+    },
+    {
+      "author": "pierrejeambrun",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 1033,
+      "body": "I would also add an assertion to check that hte `TEST_CONN_ID` wasn't mutated into db, and that no other connection record was created. (I.e the merged connection is not persisted anywhere)"
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 997,
+      "body": "I removed the unnecessary mock since the default value is already \"Disabled\" :)"
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 1027,
+      "body": "I added a mock_test_connection function that captures the actual password used during the test.\r\nwe assert that captured_password[\"value\"] == \"existing_password\" to verify the existing password is used instead of \"***\""
+    },
+    {
+      "author": "choo121600",
+      "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+      "line": 1033,
+      "body": "I would also add an assertion to check wasn't mutated into db, and that no other connection record was created"
+    }
+  ]
+}

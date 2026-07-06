@@ -1,0 +1,30 @@
+{
+  "repo": "encode/httpx",
+  "pr_number": 780,
+  "url": "https://github.com/encode/httpx/pull/780",
+  "diff": "diff --git a/docs/advanced.md b/docs/advanced.md\n--- a/docs/advanced.md\n+++ b/docs/advanced.md\n@@ -176,7 +176,7 @@ client = httpx.Client(trust_env=False)\n \n ## HTTP Proxying\n \n-HTTPX supports setting up proxies the same way that Requests does via the `proxies` parameter.\n+HTTPX supports setting up HTTP proxies the same way that Requests does via the `proxies` parameter.\n For example to forward all HTTP traffic to `http://127.0.0.1:3080` and all HTTPS traffic\n to `http://127.0.0.1:3081` your `proxies` config would look like this:\n \n@@ -189,6 +189,9 @@ to `http://127.0.0.1:3081` your `proxies` config would look like this:\n ...     ...\n ```\n \n+Credentials may be passed in as part of the URL in the standard way, i.e.\n+`http://username:password@127.0.0.1:3080`.\n+\n Proxies can be configured for a specific scheme and host, all schemes of a host,\n all hosts for a scheme, or for all requests. When determining which proxy configuration\n to use for a given request this same order is used.\n@@ -234,6 +237,8 @@ with httpx.Client(proxies=proxy) as client:\n     To use proxies you must pass the proxy information at `Client` initialization,\n     rather than on the `.get(...)` call or other request methods.\n \n+SOCKS proxies are *not* supported yet.\n+\n ## Timeout Configuration\n \n HTTPX is careful to enforce timeouts everywhere by default.\ndiff --git a/httpx/config.py b/httpx/config.py\n--- a/httpx/config.py\n+++ b/httpx/config.py\n@@ -1,6 +1,7 @@\n import os\n import ssl\n import typing\n+from base64 import b64encode\n from pathlib import Path\n \n import certifi\n@@ -325,10 +326,24 @@ def __init__(\n         if mode not in (\"DEFAULT\", \"CONNECT_ONLY\", \"TUNNEL_ONLY\"):\n             raise ValueError(f\"Unknown proxy mode {mode!r}\")\n \n+        if url.username or url.password:\n+            headers.setdefault(\n+                \"Proxy-Authorization\",\n+                self.build_auth_header(url.username, url.password),\n+            )\n+            # Remove userinfo from the URL authority, e.g.:\n+            # 'username:password@proxy_host:proxy_port' -> 'proxy_host:proxy_port'\n+            url = url.copy_with(username=None, password=None)\n+\n         self.url = url\n         self.headers = headers\n         self.mode = mode\n \n+    def build_auth_header(self, username: str, password: str) -> str:\n+        userpass = (username.encode(\"utf-8\"), password.encode(\"utf-8\"))\n+        token = b64encode(b\":\".join(userpass)).decode().strip()\n+        return f\"Basic {token}\"\n+\n     def __repr__(self) -> str:\n         return (\n             f\"Proxy(url={str(self.url)!r}, \"\ndiff --git a/tests/test_config.py b/tests/test_config.py\n--- a/tests/test_config.py\n+++ b/tests/test_config.py\n@@ -208,9 +208,27 @@ def test_ssl_config_support_for_keylog_file(tmpdir, monkeypatch):  # pragma: noc\n         assert ssl_config.ssl_context.keylog_filename is None\n \n \n-def test_proxy_from_url():\n-    proxy = httpx.Proxy(\"https://example.com\")\n-    assert repr(proxy) == \"Proxy(url='https://example.com', headers={}, mode='DEFAULT')\"\n+@pytest.mark.parametrize(\n+    \"url,expected_url,expected_headers,expected_mode\",\n+    [\n+        (\"https://example.com\", \"https://example.com\", {}, \"DEFAULT\"),\n+        (\n+            \"https://user:pass@example.com\",\n+            \"https://example.com:443\",\n+            {\"proxy-authorization\": \"Basic dXNlcjpwYXNz\"},\n+            \"DEFAULT\",\n+        ),\n+    ],\n+)\n+def test_proxy_from_url(url, expected_url, expected_headers, expected_mode):\n+    proxy = httpx.Proxy(url)\n+\n+    assert str(proxy.url) == expected_url\n+    assert dict(proxy.headers) == expected_headers\n+    assert proxy.mode == expected_mode\n+    assert repr(proxy) == \"Proxy(url='{}', headers={}, mode='{}')\".format(\n+        expected_url, str(expected_headers), expected_mode\n+    )\n \n \n def test_invalid_proxy_scheme():",
+  "labeled_issues": [
+    {
+      "file": "httpx/config.py",
+      "line_start": 337,
+      "line_end": 338,
+      "importance": "nice_to_have",
+      "category": "maintainability",
+      "description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "lovelydinosaur",
+      "file": "httpx/config.py",
+      "line": 337,
+      "body": "Perhaps replace these two lines with `ul = url.copy_with(username=None, password=None)`?"
+    },
+    {
+      "author": "yeraydiazdiaz",
+      "file": "httpx/config.py",
+      "line": 337,
+      "body": "That's definitely cleaner, good catch :+1:\r\n\r\nThe `copy_with` seems to add the default port to the URL though which forced me to change the tests a bit, but I think that's fine."
+    }
+  ]
+}

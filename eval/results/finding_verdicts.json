@@ -1,0 +1,363 @@
+{
+  "instructions": "For EVERY finding set BOTH 'is_factually_correct' (true=technically true) and 'is_actionable' (true=worth surfacing, false=trivia/noise). A factually-false finding must have is_actionable=false. Where overlaps_human_label is true, also set 'same_as_label'; else leave null. Then run: adjudicate_findings.py --report",
+  "line_tolerance": 3,
+  "findings": [
+    {
+      "case_id": "apache_airflow_53597",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        88,
+        91
+      ],
+      "finding_title": "Untested error path for unsupported Content-Type",
+      "finding_explanation": "The `header_content_type_json_or_form_depends` function raises an `HTTPException` with status `415 UNSUPPORTED_MEDIA_TYPE` if the `Content-Type` header is neither `application/json` nor `application/x-www-form-urlencoded`. This error path is not covered by existing tests.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "apache_airflow_53597",
+      "finding_index": 1,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        34,
+        35
+      ],
+      "finding_title": "Untested error path for LoginBody validation",
+      "finding_explanation": "The `parse_login_body` function includes a `try...except ValidationError` block to catch issues when creating `LoginBody` from the request payload. This path, which re-raises as `RequestValidationError` (resulting in a `422 Unprocessable Entity` response), is not explicitly tested for malformed input.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "apache_airflow_53597",
+      "finding_index": 2,
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        28,
+        48
+      ],
+      "finding_title": "Missing docstring for public function",
+      "finding_explanation": "The public function `parse_login_body` is missing a docstring, which makes it harder to understand its purpose, arguments, and return value without reading the implementation.",
+      "overlaps_human_label": true,
+      "overlapped_label_desc": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker.",
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "finding_index": 0,
+      "finding_category": "security",
+      "finding_severity": "high",
+      "finding_lines": [
+        237,
+        237
+      ],
+      "finding_title": "Credential Exposure via Connection Test Endpoint",
+      "finding_explanation": "The `test_connection` endpoint now allows users to specify an existing `connection_id` and override its properties with values from the request body. If a user provides an existing `connection_id` and changes the `conn_type` to a type that embeds credentials in its URI (e.g., `http`, `ftp`, `sftp`, `jdbc`, `mysql`, `postgres`, etc.) and sets the `host` to an attacker-controlled server, the actual credentials (login, password) of the existing connection will be retrieved from the secrets backend and included in the URI. When `conn.test_connection()` is called, it will attempt to connect to the attacker-controlled host using this URI, thereby exposing the sensitive credentials. The `update_orm_from_pydantic` function merges the `test_body` into the `existing_conn` object, allowing the `conn_type` and `host` to be changed while retaining the original sensitive fields like `login` and `password`.",
+      "overlaps_human_label": true,
+      "overlapped_label_desc": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "finding_index": 0,
+      "finding_category": "security",
+      "finding_severity": "high",
+      "finding_lines": [
+        345,
+        346
+      ],
+      "finding_title": "Potential SQL Injection via direct string interpolation",
+      "finding_explanation": "The `duplicate_key_handling` and `extra_options` parameters are directly interpolated into the SQL query string using an f-string. This bypasses the database driver's parameterization, making the `LOAD DATA LOCAL INFILE` statement vulnerable to SQL injection if these parameters contain untrusted input. An attacker could inject malicious SQL code, potentially leading to data manipulation or other unauthorized actions.",
+      "overlaps_human_label": true,
+      "overlapped_label_desc": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": true
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "critical",
+      "finding_lines": [
+        150,
+        150
+      ],
+      "finding_title": "Potential ZeroDivisionError in exponential backoff calculation",
+      "finding_explanation": "The calculation `hash % min_backoff` can raise a `ZeroDivisionError` if `min_backoff` evaluates to 0. `min_backoff` is derived from `int(self.poke_interval * (2 ** (try_number - 2)))`. If `self.poke_interval` is a small float (e.g., 0.5) and `try_number` is 1 or 2, `min_backoff` can become 0 after integer conversion, leading to a crash.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": null
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "finding_index": 1,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        107,
+        124
+      ],
+      "finding_title": "`execute` method's exponential backoff progression needs direct testing",
+      "finding_explanation": "The `execute` method's loop now uses `try_number` and `_get_next_poke_interval` to determine sleep/reschedule intervals. While `_get_next_poke_interval` is tested in isolation, the full interaction within the `execute` loop, including how `try_number` increments and affects the actual sleep/reschedule times, is not directly verified. This applies to both `poke` and `reschedule` modes when `exponential_backoff=True`.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "finding_index": 2,
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        138,
+        162
+      ],
+      "finding_title": "Potential duplicated logic for exponential backoff calculation",
+      "finding_explanation": "The docstring for `_get_next_poke_interval` explicitly states 'Using the similar logic which is used for exponential backoff retry delay for operators.' If this logic is indeed a copy of existing code, it introduces duplication. Duplicated logic can lead to inconsistencies if one version is updated but the other is not, and increases maintenance overhead.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": false,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "django_django_17583",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        802,
+        810
+      ],
+      "finding_title": "Model.save() behavior with only generated fields deferred",
+      "finding_explanation": "The change modifies how `deferred_fields` are considered for automatic `update_fields` in `Model.save()`. If only generated fields are deferred, the `elif` block (lines 802-810) should be skipped, preventing an unnecessary `UPDATE` query. This specific scenario is not explicitly tested.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": false,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "django_django_17730",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        403,
+        403
+      ],
+      "finding_title": "Untested early exit for empty replacements",
+      "finding_explanation": "The `replace_expressions` method now includes an early exit if the `replacements` dictionary is empty. This specific branch should be tested.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "django_django_17730",
+      "finding_index": 1,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        406,
+        406
+      ],
+      "finding_title": "Untested early exit for empty source expressions",
+      "finding_explanation": "The `replace_expressions` method now includes an early exit if `get_source_expressions()` returns an empty or falsy value. This specific branch should be tested.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "django_django_17730",
+      "finding_index": 2,
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        488,
+        498
+      ],
+      "finding_title": "New cached classproperty and modified identity logic untested",
+      "finding_explanation": "A new `_constructor_signature` classproperty with `lru_cache` has been introduced, and the `identity` method's logic for obtaining and processing the constructor signature has changed, including skipping the `self` argument. This new caching mechanism and the modified argument processing need thorough testing to ensure correctness and cache behavior.",
+      "overlaps_human_label": true,
+      "overlapped_label_desc": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation.",
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": false
+    },
+    {
+      "case_id": "django_django_17730",
+      "finding_index": 3,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        973,
+        973
+      ],
+      "finding_title": "Untested early exit for empty change_map",
+      "finding_explanation": "The `change_aliases` method now includes an early exit if the `change_map` dictionary is empty. This specific branch should be tested.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "django_django_17730",
+      "finding_index": 4,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        205,
+        205
+      ],
+      "finding_title": "Untested early exit for empty change_map",
+      "finding_explanation": "The `relabel_aliases` method now includes an early exit if the `change_map` dictionary is empty. This specific branch should be tested.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "finding_index": 0,
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        111,
+        115
+      ],
+      "finding_title": "Duplicated IPv6 bracketing logic",
+      "finding_explanation": "The logic to enclose an IPv6 address in square brackets if it's not already (`if host and \":\" in host and host[0] != \"[\"`) is duplicated in the `__init__` method and the `copy_with` method (lines 339-341).",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": null
+    },
+    {
+      "case_id": "encode_httpx_2911",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        34,
+        42
+      ],
+      "finding_title": "test_encoded for UTF-16/32 without BOM is incorrect",
+      "finding_explanation": "The `test_encoded` function currently asserts that `response.json()` can parse JSON content encoded in `utf-16-le`, `utf-16-be`, `utf-32-le`, and `utf-32-be` without a Byte Order Mark (BOM). However, the `Response.json()` method now directly passes `self.content` (bytes) to `json.loads()`. Python's `json.loads()` defaults to UTF-8 decoding when given bytes and does not automatically detect UTF-16 or UTF-32 encodings without a BOM. Therefore, these specific test cases should fail with a `json.JSONDecodeError`, indicating a regression in functionality compared to the previous implementation that used `guess_json_utf`. The current passing state of these tests is misleading.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": false,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        327,
+        328
+      ],
+      "finding_title": "Proxy initialization with partial credentials from URL",
+      "finding_explanation": "The `Proxy` class's `__init__` method calls `build_auth_header` with `url.username` and `url.password` directly. If `url.password` is `None` (e.g., for a proxy URL like `http://user@proxy_host`), `password.encode(\"utf-8\")` inside `build_auth_header` will raise an `AttributeError`. This represents an untested error path and a potential runtime crash.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": null
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "finding_index": 1,
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        340,
+        343
+      ],
+      "finding_title": "Missing docstring for public method",
+      "finding_explanation": "The 'build_auth_header' method is a public method of the 'Proxy' class and should have a docstring explaining its purpose, arguments, and return value.",
+      "overlaps_human_label": true,
+      "overlapped_label_desc": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": false
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "finding_index": 0,
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        68,
+        80
+      ],
+      "finding_title": "Unclear docstring",
+      "finding_explanation": "The docstring for `test_events_http_api_dates_wrong_order` is generic ('Test the calendar demo view.') and does not clearly state the specific scenario being tested (start date after end date).",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "finding_index": 0,
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        679,
+        716
+      ],
+      "finding_title": "Missing test coverage for Pipeline.fit_transform with callbacks",
+      "finding_explanation": "The `fit_transform` method now integrates callback functionality, including conditional branches for the final estimator (passthrough, `fit_transform` method, or `fit().transform()` sequence). The existing tests primarily cover the `fit` method's callback behavior, leaving these specific `fit_transform` paths untested with callbacks.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": false,
+      "same_as_label": null
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "finding_index": 1,
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        621,
+        826
+      ],
+      "finding_title": "Duplicated callback handling for the final estimator",
+      "finding_explanation": "The logic for initializing a subcontext, propagating callbacks, and calling `on_fit_task_begin` and `on_fit_task_end` for the final estimator (including the 'passthrough' case) is duplicated across the `fit`, `fit_transform`, and `fit_predict` methods. This increases code verbosity and makes future changes harder to maintain.",
+      "overlaps_human_label": false,
+      "overlapped_label_desc": null,
+      "is_factually_correct": true,
+      "is_actionable": true,
+      "same_as_label": null
+    }
+  ]
+}

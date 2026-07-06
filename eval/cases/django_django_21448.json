@@ -1,0 +1,48 @@
+{
+  "repo": "django/django",
+  "pr_number": 21448,
+  "url": "https://github.com/django/django/pull/21448",
+  "diff": "diff --git a/django/core/mail/message.py b/django/core/mail/message.py\n--- a/django/core/mail/message.py\n+++ b/django/core/mail/message.py\n@@ -360,8 +360,14 @@ def message(self, *, policy=email.policy.default):\n             # Use cached DNS_NAME for performance\n             msg[\"Message-ID\"] = make_msgid(domain=DNS_NAME)\n         for name, value in self.extra_headers.items():\n+            header = name.lower()\n+            if header == \"bcc\":\n+                raise ValueError(\n+                    'Bcc is not a valid email header. Use the \"bcc\" '\n+                    \"argument to specify blind carbon copy recipients.\"\n+                )\n             # Avoid headers handled above.\n-            if name.lower() not in {\"from\", \"to\", \"cc\", \"reply-to\"}:\n+            if header not in {\"from\", \"to\", \"cc\", \"reply-to\"}:\n                 msg[name] = force_str(value, strings_only=True)\n         self._idna_encode_address_header_domains(msg)\n         return msg\ndiff --git a/docs/releases/6.1.txt b/docs/releases/6.1.txt\n--- a/docs/releases/6.1.txt\n+++ b/docs/releases/6.1.txt\n@@ -470,6 +470,10 @@ Email\n   ``EmailMessage``. (This behavior was never documented. The ``send()`` method\n   will still *use* a ``connection`` that is set on the message before sending.)\n \n+* :meth:`.EmailMessage.message` now raises a ``ValueError`` if ``Bcc`` is\n+  included in the ``headers`` argument or ``extra_headers`` attribute. Use the\n+  ``bcc`` argument instead.\n+\n Models\n ------\n \ndiff --git a/docs/topics/email.txt b/docs/topics/email.txt\n--- a/docs/topics/email.txt\n+++ b/docs/topics/email.txt\n@@ -505,7 +505,7 @@ email backend API :ref:`provides an alternative\n     * ``cc``: A list or tuple of recipient addresses used in the \"Cc\" header\n       when sending the email.\n \n-    * ``bcc``: A list or tuple of addresses used in the \"Bcc\" header when\n+    * ``bcc``: A list or tuple of addresses used for blind carbon copies when\n       sending the email.\n \n     * ``reply_to``: A list or tuple of recipient addresses used in the\ndiff --git a/tests/mail/tests.py b/tests/mail/tests.py\n--- a/tests/mail/tests.py\n+++ b/tests/mail/tests.py\n@@ -397,6 +397,18 @@ def test_bcc_not_in_headers(self):\n         self.assertNotIn(\"bcc@example.com\", message.as_string())\n         self.assertEqual(email.recipients(), [\"to@example.com\", \"bcc@example.com\"])\n \n+    def test_bcc_in_headers_raises_error(self):\n+        email = EmailMessage(\n+            to=[\"to@example.com\"],\n+            headers={\"Bcc\": \"bcc@example.com\"},\n+        )\n+        msg = (\n+            'Bcc is not a valid email header. Use the \"bcc\" argument to '\n+            \"specify blind carbon copy recipients.\"\n+        )\n+        with self.assertRaisesMessage(ValueError, msg):\n+            email.message()\n+\n     def test_reply_to(self):\n         with self.subTest(\"Single Reply-To\"):\n             email = EmailMessage(",
+  "labeled_issues": [
+    {
+      "file": "django/core/mail/message.py",
+      "line_start": 363,
+      "line_end": 368,
+      "importance": "must_fix",
+      "category": null,
+      "description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "medmunds",
+      "file": "django/core/mail/message.py",
+      "line": 366,
+      "body": "Django should not silently ignore headers that the caller has added.\n\n```suggestion\n            if header == \"bcc\":\n                raise ValueError(\n                    \"Bcc is not a valid email header. Use the 'bcc' \"\n                    \"argument to specify blind carbon copy recipients.\"\n                )\n```"
+    },
+    {
+      "author": "diaxoaine",
+      "file": "django/core/mail/message.py",
+      "line": 366,
+      "body": "I updated the patch."
+    },
+    {
+      "author": "medmunds",
+      "file": "docs/releases/6.1.txt",
+      "line": 476,
+      "body": "I would maybe mention both `extra_headers` and `headers` here. (Confusingly, the `EmailMessage` constructor takes a `headers` *argument* but turns it into an `extra_headers` *attribute* that can be modified at any time before sending.) And maybe clarify that the `bcc` argument is for `EmailMessage`, not the `message()` method.\n\nMaybe something like (this will need to be re-wrapped):\n\n```suggestion\n* :meth:`.EmailMessage.message` now raises a ``ValueError`` if ``Bcc`` is\n  included in the ``headers`` argument or ``extra_headers`` attribute. Previously, a ``Bcc`` header was\n  included in the generated message. Use the :class:`.EmailMessage`\\ 's ``bcc`` argument instead.\n```"
+    },
+    {
+      "author": "medmunds",
+      "file": "tests/mail/tests.py",
+      "line": 403,
+      "body": "```suggestion\n    def test_bcc_in_headers_raises_error(self):\n```\n\nThe docstring not needed. (In new code, Django avoids docstrings for test cases unless they add significant information beyond a descriptive test case name.)"
+    },
+    {
+      "author": "medmunds",
+      "file": "tests/mail/tests.py",
+      "line": 410,
+      "body": "[note to other reviewers] I *don't* think there would be any value in testing `extra_headers` separately from this test for `headers`. The assertion is scoped to the `message()` method, which covers both."
+    }
+  ]
+}

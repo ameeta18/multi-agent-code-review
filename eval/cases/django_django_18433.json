@@ -1,0 +1,45 @@
+{
+  "repo": "django/django",
+  "pr_number": 18433,
+  "url": "https://github.com/django/django/pull/18433",
+  "diff": "diff --git a/django/views/debug.py b/django/views/debug.py\n--- a/django/views/debug.py\n+++ b/django/views/debug.py\n@@ -113,7 +113,7 @@ class SafeExceptionReporterFilter:\n \n     cleansed_substitute = \"********************\"\n     hidden_settings = _lazy_re_compile(\n-        \"API|TOKEN|KEY|SECRET|PASS|SIGNATURE|HTTP_COOKIE\", flags=re.I\n+        \"API|AUTH|TOKEN|KEY|SECRET|PASS|SIGNATURE|HTTP_COOKIE\", flags=re.I\n     )\n \n     def cleanse_setting(self, key, value):\ndiff --git a/docs/howto/error-reporting.txt b/docs/howto/error-reporting.txt\n--- a/docs/howto/error-reporting.txt\n+++ b/docs/howto/error-reporting.txt\n@@ -282,7 +282,11 @@ following attributes and methods:\n \n             import re\n \n-            re.compile(r\"API|TOKEN|KEY|SECRET|PASS|SIGNATURE|HTTP_COOKIE\", flags=re.IGNORECASE)\n+            re.compile(r\"API|AUTH|TOKEN|KEY|SECRET|PASS|SIGNATURE|HTTP_COOKIE\", flags=re.IGNORECASE)\n+\n+        .. versionchanged:: 5.2\n+\n+            The term ``AUTH`` was added.\n \n     .. method:: is_active(request)\n \ndiff --git a/docs/releases/5.2.txt b/docs/releases/5.2.txt\n--- a/docs/releases/5.2.txt\n+++ b/docs/releases/5.2.txt\n@@ -150,7 +150,8 @@ Email\n Error Reporting\n ~~~~~~~~~~~~~~~\n \n-* ...\n+* The attribute :attr:`.SafeExceptionReporterFilter.hidden_settings` now\n+  treats values as sensitive if their name includes ``AUTH``.\n \n File Storage\n ~~~~~~~~~~~~\ndiff --git a/tests/view_tests/tests/test_debug.py b/tests/view_tests/tests/test_debug.py\n--- a/tests/view_tests/tests/test_debug.py\n+++ b/tests/view_tests/tests/test_debug.py\n@@ -1552,6 +1552,14 @@ class ExceptionReporterFilterTests(\n     \"\"\"\n \n     rf = RequestFactory()\n+    sensitive_settings = [\n+        \"SECRET_KEY\",\n+        \"SECRET_KEY_FALLBACKS\",\n+        \"PASSWORD\",\n+        \"API_KEY\",\n+        \"SOME_TOKEN\",\n+        \"MY_AUTH\",\n+    ]\n \n     def test_non_sensitive_request(self):\n         \"\"\"\n@@ -1774,42 +1782,30 @@ def test_sensitive_settings(self):\n         The debug page should not show some sensitive settings\n         (password, secret key, ...).\n         \"\"\"\n-        sensitive_settings = [\n-            \"SECRET_KEY\",\n-            \"SECRET_KEY_FALLBACKS\",\n-            \"PASSWORD\",\n-            \"API_KEY\",\n-            \"AUTH_TOKEN\",\n-        ]\n-        for setting in sensitive_settings:\n-            with self.settings(DEBUG=True, **{setting: \"should not be displayed\"}):\n-                response = self.client.get(\"/raises500/\")\n-                self.assertNotContains(\n-                    response, \"should not be displayed\", status_code=500\n-                )\n+        for setting in self.sensitive_settings:\n+            with self.subTest(setting=setting):\n+                with self.settings(DEBUG=True, **{setting: \"should not be displayed\"}):\n+                    response = self.client.get(\"/raises500/\")\n+                    self.assertNotContains(\n+                        response, \"should not be displayed\", status_code=500\n+                    )\n \n     def test_settings_with_sensitive_keys(self):\n         \"\"\"\n         The debug page should filter out some sensitive information found in\n         dict settings.\n         \"\"\"\n-        sensitive_settings = [\n-            \"SECRET_KEY\",\n-            \"SECRET_KEY_FALLBACKS\",\n-            \"PASSWORD\",\n-            \"API_KEY\",\n-            \"AUTH_TOKEN\",\n-        ]\n-        for setting in sensitive_settings:\n+        for setting in self.sensitive_settings:\n             FOOBAR = {\n                 setting: \"should not be displayed\",\n                 \"recursive\": {setting: \"should not be displayed\"},\n             }\n-            with self.settings(DEBUG=True, FOOBAR=FOOBAR):\n-                response = self.client.get(\"/raises500/\")\n-                self.assertNotContains(\n-                    response, \"should not be displayed\", status_code=500\n-                )\n+            with self.subTest(setting=setting):\n+                with self.settings(DEBUG=True, FOOBAR=FOOBAR):\n+                    response = self.client.get(\"/raises500/\")\n+                    self.assertNotContains(\n+                        response, \"should not be displayed\", status_code=500\n+                    )\n \n     def test_cleanse_setting_basic(self):\n         reporter_filter = SafeExceptionReporterFilter()\n@@ -1883,10 +1879,26 @@ def test_cleanse_setting_recurses_in_list_tuples(self):\n         )\n \n     def test_request_meta_filtering(self):\n-        request = self.rf.get(\"/\", headers={\"secret-header\": \"super_secret\"})\n+        headers = {\n+            \"API_URL\": \"super secret\",\n+            \"A_SIGNATURE_VALUE\": \"super secret\",\n+            \"MY_KEY\": \"super secret\",\n+            \"PASSWORD\": \"super secret\",\n+            \"SECRET_VALUE\": \"super secret\",\n+            \"SOME_TOKEN\": \"super secret\",\n+            \"THE_AUTH\": \"super secret\",\n+        }\n+        request = self.rf.get(\"/\", headers=headers)\n         reporter_filter = SafeExceptionReporterFilter()\n+        cleansed_headers = reporter_filter.get_safe_request_meta(request)\n+        for header in headers:\n+            with self.subTest(header=header):\n+                self.assertEqual(\n+                    cleansed_headers[f\"HTTP_{header}\"],\n+                    reporter_filter.cleansed_substitute,\n+                )\n         self.assertEqual(\n-            reporter_filter.get_safe_request_meta(request)[\"HTTP_SECRET_HEADER\"],\n+            cleansed_headers[\"HTTP_COOKIE\"],\n             reporter_filter.cleansed_substitute,\n         )\n \n@@ -1910,9 +1922,7 @@ def test_cleanse_session_cookie_value(self):\n \n class CustomExceptionReporterFilter(SafeExceptionReporterFilter):\n     cleansed_substitute = \"XXXXXXXXXXXXXXXXXXXX\"\n-    hidden_settings = _lazy_re_compile(\n-        \"API|TOKEN|KEY|SECRET|PASS|SIGNATURE|DATABASE_URL\", flags=re.I\n-    )\n+    hidden_settings = _lazy_re_compile(\"PASS|DATABASE\", flags=re.I)\n \n \n @override_settings(",
+  "labeled_issues": [],
+  "reviewer_comments": [
+    {
+      "author": "jacobtylerwalls",
+      "file": "docs/releases/5.2.txt",
+      "line": 154,
+      "body": "```suggestion\r\n  treats values as sensitive if their key name includes ``AUTH``.\r\n```"
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "docs/releases/5.2.txt",
+      "line": 154,
+      "body": "Or keep everything singular:  \"treats a value as sensitive if its key name includes ``AUTH``.\"\r\n\r\nAlso, we might improve on \"key name\", since it's not always the case that users interact with their settings as a dictionary.\r\n\r\nMaybe:\r\n\r\n\"Settings including ``AUTH`` in their name are now treated as sensitive by the attribute ...`\""
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "docs/howto/error-reporting.txt",
+      "line": 285,
+      "body": "Should we add .. versionchanged?"
+    },
+    {
+      "author": "nessita",
+      "file": "docs/releases/5.2.txt",
+      "line": 154,
+      "body": "Thank you! Will incorporate this feedback :100: "
+    },
+    {
+      "author": "nessita",
+      "file": "docs/howto/error-reporting.txt",
+      "line": 285,
+      "body": "I pondered about this, I was undecided because our docs say that `versionchanged` is [for new features](https://docs.djangoproject.com/en/dev/internals/contributing/writing-documentation/#documenting-new-features), but given that you are also highlighting this, it may be worth adding it.\r\n\r\nWill push this change shortly. Thank you!"
+    },
+    {
+      "author": "nessita",
+      "file": "docs/releases/5.2.txt",
+      "line": 154,
+      "body": "@jacobtylerwalls I opted for using \"if their name includes...\" (removing `key`) because I specifically want to avoid mentioning `settings` since a common use case for this filter is to sanitize request.META which is not about settings at all (but header names)."
+    }
+  ]
+}

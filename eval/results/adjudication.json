@@ -1,0 +1,295 @@
+{
+  "instructions": "For each candidate, set 'same_issue' to true if the bot finding identifies the SAME problem as the label (not merely the same lines). Set false if it's a different problem at the same location. Then run: score_eval.py --score",
+  "line_tolerance": 3,
+  "candidates": [
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "maintainability",
+      "finding_severity": "high",
+      "finding_lines": [
+        238,
+        245
+      ],
+      "finding_title": "Inconsistent and potentially incorrect `conn_id` assignment for transient connection.",
+      "finding_explanation": "The logic for setting the `conn_id` of the temporary `Connection` object used for testing is inconsistent and prone to error. In the `try` block (lines 239-242), `existing_conn.conn_id = transient_conn_id` is set, but then `update_orm_from_pydantic` is called. If `test_body` contains a `connection_id` (which maps to `conn_id`), `update_orm_from_pydantic` will overwrite `existing_conn.conn_id` with the value from `test_body`, effectively undoing the transient ID assignment. This means the connection might be tested with its original ID, violating the intent of using a `transient_conn_id`. In contrast, the `except` block (lines 243-245) correctly sets `data[\"conn_id\"] = transient_conn_id` before creating the `Connection` object.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "security",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        346,
+        346
+      ],
+      "label_description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "finding_category": "security",
+      "finding_severity": "high",
+      "finding_lines": [
+        342,
+        345
+      ],
+      "finding_title": "SQL Injection via direct string interpolation in bulk_load_custom",
+      "finding_explanation": "The `duplicate_key_handling` and `extra_options` parameters are directly interpolated into the SQL query using f-strings. Since these parts of the `LOAD DATA LOCAL INFILE` statement are structural clauses and cannot be parameterized by the database driver, direct interpolation is used. However, without proper validation or whitelisting of these inputs, an attacker can inject arbitrary SQL commands, leading to SQL injection.",
+      "same_issue": true
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        784,
+        784
+      ],
+      "label_description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields.",
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        781,
+        810
+      ],
+      "finding_title": "Missing test for Model.save() with deferred generated and non-generated fields",
+      "finding_explanation": "The change modifies how `update_fields` are implicitly determined for deferred model instances by introducing `deferred_non_generated_fields`. This new logic is not fully covered. Specifically, if a `GeneratedField` is deferred alongside other non-generated fields (e.g., `Model.objects.defer('generated_field', 'regular_field').get(...)`), the current implementation of `loaded_fields` calculation will incorrectly include the deferred `GeneratedField` in the `update_fields` set. This is because `field_names` (derived from `_meta.concrete_fields`) still contains generated fields, while `deferred_non_generated_fields` explicitly excludes them. Attempting to save such an instance could lead to a crash or an error when Django tries to update a database-managed generated column.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        336,
+        336
+      ],
+      "finding_title": "Missing test for proxy URL with partial credentials",
+      "finding_explanation": "The `Proxy.build_auth_header` method is called with `username` and `password` which can be `None` if only one part of the credentials is provided in the proxy URL (e.g., `http://user@proxy` or `http://:pass@proxy`). The current tests only cover cases where both `username` and `password` are non-None strings. A realistic input like `http://user@proxy_host` would pass `None` for `password`, leading to an `AttributeError` when `.encode()` is called on `None` at line 336.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "maintainability",
+      "finding_severity": "high",
+      "finding_lines": [
+        331,
+        339
+      ],
+      "finding_title": "Potential AttributeError due to type mismatch in Proxy.__init__",
+      "finding_explanation": "The `Proxy.__init__` method calls `self.build_auth_header(url.username, url.password)`. The `url.username` and `url.password` attributes can be `None` if not present in the URL. However, the `build_auth_header` method is typed to accept `str` for both parameters, and its implementation `username.encode('utf-8')` will raise an `AttributeError` if `username` (or `password`) is `None`. This introduces a potential runtime error when a proxy URL contains only a username or only a password, or if either is explicitly `None`.",
+      "same_issue": false
+    }
+  ],
+  "auto_misses": [
+    {
+      "case_id": "apache_airflow_53597",
+      "label_index": 0,
+      "label": {
+        "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+        "line_start": 26,
+        "line_end": 26,
+        "importance": "nice_to_have",
+        "category": "maintainability",
+        "description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 1,
+      "label": {
+        "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+        "line_start": 1027,
+        "line_end": 1033,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "label_index": 0,
+      "label": {
+        "file": "tests/sensors/test_base_sensor.py",
+        "line_start": 524,
+        "line_end": 529,
+        "importance": "must_fix",
+        "category": "test_coverage",
+        "description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 1,
+      "label": {
+        "file": "tests/model_fields/models.py",
+        "line_start": 505,
+        "line_end": 505,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_17730",
+      "label_index": 0,
+      "label": {
+        "file": "django/db/models/expressions.py",
+        "line_start": 501,
+        "line_end": 501,
+        "importance": "nice_to_have",
+        "category": "maintainability",
+        "description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_21426",
+      "label_index": 0,
+      "label": {
+        "file": "django/core/cache/backends/db.py",
+        "line_start": 281,
+        "line_end": 282,
+        "importance": "must_fix",
+        "category": null,
+        "description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_21438",
+      "label_index": 0,
+      "label": {
+        "file": "django/utils/http.py",
+        "line_start": 200,
+        "line_end": 208,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests)."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_21448",
+      "label_index": 0,
+      "label": {
+        "file": "django/core/mail/message.py",
+        "line_start": 363,
+        "line_end": 368,
+        "importance": "must_fix",
+        "category": null,
+        "description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "label_index": 0,
+      "label": {
+        "file": "tests/models/test_url.py",
+        "line_start": 302,
+        "line_end": 304,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "encode_httpx_1469",
+      "label_index": 0,
+      "label": {
+        "file": "httpx/_transports/wsgi.py",
+        "line_start": 77,
+        "line_end": 77,
+        "importance": "must_fix",
+        "category": null,
+        "description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "label_index": 0,
+      "label": {
+        "file": "homeassistant/components/calendar/__init__.py",
+        "line_start": 389,
+        "line_end": 390,
+        "importance": "must_fix",
+        "category": "test_coverage",
+        "description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_23299",
+      "label_index": 0,
+      "label": {
+        "file": "sklearn/feature_selection/_from_model.py",
+        "line_start": 393,
+        "line_end": 393,
+        "importance": "nice_to_have",
+        "category": "maintainability",
+        "description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 0,
+      "label": {
+        "file": "sklearn/pipeline.py",
+        "line_start": 1577,
+        "line_end": 1594,
+        "importance": "nice_to_have",
+        "category": "maintainability",
+        "description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 1,
+      "label": {
+        "file": "sklearn/tests/test_pipeline.py",
+        "line_start": 2605,
+        "line_end": 2634,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "Reviewer asked for additional test cases: callbacks set directly on steps without auto-propagation, without memory enabled, and exercising passthrough steps with non-empty callback lists. Tests were added."
+      },
+      "reason": "no bot finding overlapped this location"
+    }
+  ]
+}

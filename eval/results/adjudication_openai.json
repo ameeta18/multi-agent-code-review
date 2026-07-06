@@ -1,0 +1,514 @@
+{
+  "instructions": "For each candidate, set 'same_issue' to true if the bot finding identifies the SAME problem as the label (not merely the same lines). Set false if it's a different problem at the same location. Then run: score_eval.py --score",
+  "line_tolerance": 3,
+  "candidates": [
+    {
+      "case_id": "apache_airflow_53597",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        26,
+        26
+      ],
+      "label_description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        22,
+        48
+      ],
+      "finding_title": "Add tests for form parsing and unsupported content-type handling in login body parser",
+      "finding_explanation": "`parse_login_body` is new and contains distinct branches for JSON, form data, and unsupported content types, plus a validation-error path. Only the happy-path route test is added in this diff, so these branches are currently unverified.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_53597",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        26,
+        26
+      ],
+      "label_description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker.",
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        23,
+        48
+      ],
+      "finding_title": "Validation errors are re-raised without preserving the original exception context",
+      "finding_explanation": "`RequestValidationError(repr(e))` discards the structured Pydantic validation details and the original traceback/context, which makes debugging and error reporting harder. This helper is the new central parsing path for `/auth/token`, so losing the underlying validation information reduces maintainability.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        231,
+        246
+      ],
+      "finding_title": "Missing tests for the new merge path when testing an existing connection",
+      "finding_explanation": "The `/connections/test` handler now has a new branch that loads an existing connection, applies `update_orm_from_pydantic`, and falls back to constructing a new `Connection` on `AirflowNotFoundException`. This behavior is easy to regress because it changes how sensitive fields like password/extra are sourced and how missing connections are handled.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        233,
+        243
+      ],
+      "finding_title": "Nested fallback logic makes the test endpoint harder to follow",
+      "finding_explanation": "The new `try`/`except` inside the existing `try` block adds two separate construction paths for `conn` in the same function. This increases branching and makes the merge behavior for existing vs. new connections harder to reason about and maintain.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "security",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        346,
+        346
+      ],
+      "label_description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        342,
+        347
+      ],
+      "finding_title": "Add coverage for SQL assembly with non-default bulk-load options",
+      "finding_explanation": "`bulk_load_custom` now interpolates `duplicate_key_handling` and `extra_options` directly into the SQL string and only parameterizes the file path. This changes the query construction and introduces a new branch of behavior that should be exercised to ensure the generated SQL and parameters are correct for both supported modes.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "test_coverage",
+      "label_importance": "must_fix",
+      "label_lines": [
+        524,
+        529
+      ],
+      "label_description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        523,
+        523
+      ],
+      "finding_title": "Debug print left in test",
+      "finding_explanation": "The added `print(started_at)` is noisy and unnecessary in a test, which makes the test output harder to read.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        784,
+        784
+      ],
+      "label_description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        781,
+        814
+      ],
+      "finding_title": "Add coverage for save() with deferred generated fields and foreign keys",
+      "finding_explanation": "The save() logic now distinguishes generated fields from other deferred fields when deciding whether to auto-populate update_fields. This new branch is risky because it changes behavior for models that combine GeneratedField and ForeignKey fields, including the crash path fixed here.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_17730",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        501,
+        501
+      ],
+      "label_description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        491,
+        500
+      ],
+      "finding_title": "Add coverage for Expression.identity using constructor signature cache",
+      "finding_explanation": "The identity computation now uses a cached class-level constructor signature and explicitly skips the bound `self` argument. This changes how positional/keyword defaults are bound and could regress identity generation for expressions with custom `__init__` signatures.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_17730",
+      "label_index": 0,
+      "finding_index": 5,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        501,
+        501
+      ],
+      "label_description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        490,
+        498
+      ],
+      "finding_title": "Cached constructor signature adds extra indirection to identity computation",
+      "finding_explanation": "`identity` now depends on the new `_constructor_signature` classproperty and manually skips the bound `self` argument. This makes the flow harder to follow than the previous direct `inspect.signature(self.__init__)` call and introduces a second layer of caching/indirection for a small optimization.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21426",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        281,
+        282
+      ],
+      "label_description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        281,
+        284
+      ],
+      "finding_title": "Add a test for the new cull_num guard when remaining_num still exceeds max_entries",
+      "finding_explanation": "The culling logic now skips the DELETE when `remaining_num // _cull_frequency` is zero, even if `remaining_num > _max_entries`. This new branch is easy to regress and is not directly covered by the existing test added in `tests/cache/tests.py`, which only asserts the high-frequency case through a specific cache setup.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21426",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        281,
+        282
+      ],
+      "label_description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        281,
+        284
+      ],
+      "finding_title": "Culling condition now computes `cull_num` unconditionally",
+      "finding_explanation": "`cull_num` is calculated before checking whether `remaining_num` exceeds `_max_entries`, which makes the control flow less direct than before. The logic is still correct, but the extra branching is harder to read and maintain than the previous single guard.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21438",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "test_coverage",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        200,
+        208
+      ],
+      "label_description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests).",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        200,
+        208
+      ],
+      "finding_title": "Add tests for split_header_value with quoted commas and non-comma separators",
+      "finding_explanation": "The new helper is public and used by multiple cache/header parsers, but the current tests only cover simple token lists. The implementation intentionally skips empty parts and strips whitespace, yet its behavior with quoted values or alternate separators is not exercised in the diff.",
+      "same_issue": true
+    },
+    {
+      "case_id": "django_django_21438",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "test_coverage",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        200,
+        208
+      ],
+      "label_description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests).",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        211,
+        223
+      ],
+      "finding_title": "Add coverage for parse_etags whitespace and comma edge cases",
+      "finding_explanation": "parse_etags now depends on split_header_value, changing how whitespace and empty segments are handled. The diff adds no direct tests for parse_etags itself, so regressions in ETag parsing could slip through.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21438",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "test_coverage",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        200,
+        208
+      ],
+      "label_description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests).",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        200,
+        206
+      ],
+      "finding_title": "Public helper lacks a docstring that explains its parsing limits clearly enough",
+      "finding_explanation": "`split_header_value()` is a new public utility, but its docstring only briefly notes the intended header types. Since it is now reused across cache and middleware code, the contract around trimming, empty-part dropping, and the comma/quoted-string limitation should be stated more explicitly to avoid misuse.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21448",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        363,
+        368
+      ],
+      "label_description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        363,
+        368
+      ],
+      "finding_title": "Missing test for Bcc rejection via extra_headers attribute",
+      "finding_explanation": "The new ValueError path only has coverage for passing `Bcc` in the `headers` constructor argument. The same branch also rejects `Bcc` when it appears in `extra_headers`, which is a separate entry point and should be exercised explicitly.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        329,
+        338
+      ],
+      "finding_title": "Add tests for proxy credential handling and header generation",
+      "finding_explanation": "The new proxy-authentication branch strips userinfo from the URL and injects a Proxy-Authorization header, but only the happy-path URL case is covered in the diff. The encoding and header insertion logic should be exercised directly, including username/password URLs and the no-credentials path.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "test_coverage",
+      "finding_severity": "low",
+      "finding_lines": [
+        340,
+        343
+      ],
+      "finding_title": "Cover build_auth_header edge cases",
+      "finding_explanation": "The new build_auth_header helper is untested in the diff. Its UTF-8/base64 encoding behavior should be verified, especially for non-ASCII usernames/passwords and empty password handling.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        334,
+        339
+      ],
+      "finding_title": "Proxy auth header construction is split across constructor and helper",
+      "finding_explanation": "`Proxy.__init__` now mixes URL normalization with proxy-auth header generation, and the new `build_auth_header` helper is only used once. This adds a small amount of indirection without improving reuse, making the proxy initialization path slightly harder to follow.",
+      "same_issue": false
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "test_coverage",
+      "label_importance": "must_fix",
+      "label_lines": [
+        389,
+        390
+      ],
+      "label_description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added.",
+      "finding_category": "test_coverage",
+      "finding_severity": "low",
+      "finding_lines": [
+        389,
+        389
+      ],
+      "finding_title": "Add coverage for reversed date range rejection",
+      "finding_explanation": "The new `start_date > end_date` guard returns `400 Bad Request`, but this branch is only covered indirectly by the added test in the HTTP API suite. The change in the handler itself should be exercised with a test that verifies reversed `start`/`end` parameters are rejected before `async_get_events` is called.",
+      "same_issue": true
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_23299",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        393,
+        393
+      ],
+      "label_description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        389,
+        416
+      ],
+      "finding_title": "Add tests for `partial_fit` feature-name validation branches",
+      "finding_explanation": "`partial_fit` now conditionally copies `feature_names_in_` from the wrapped estimator or falls back to `_check_feature_names(X, reset=first_call)`. The new branch behavior is only partially covered by the added frame/non-frame test and does not exercise the error path when feature names are inconsistent across successive `partial_fit` calls.",
+      "same_issue": false
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        1577,
+        1594
+      ],
+      "label_description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        1577,
+        1598
+      ],
+      "finding_title": "Test callback-aware cached transformer wrapper and passthrough branch in _fit",
+      "finding_explanation": "The new `_fit_transform_one_with_callbacks` wrapper adds callback propagation around cached transformer fitting, and `_fit()` now calls `subcontext.call_on_fit_task_begin/end` for passthrough steps. These branches are subtle and should be tested directly through a cached pipeline with a passthrough intermediate step.",
+      "same_issue": false
+    }
+  ],
+  "auto_misses": [
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 1,
+      "label": {
+        "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+        "line_start": 1027,
+        "line_end": 1033,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 1,
+      "label": {
+        "file": "tests/model_fields/models.py",
+        "line_start": 505,
+        "line_end": 505,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "label_index": 0,
+      "label": {
+        "file": "tests/models/test_url.py",
+        "line_start": 302,
+        "line_end": 304,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "encode_httpx_1469",
+      "label_index": 0,
+      "label": {
+        "file": "httpx/_transports/wsgi.py",
+        "line_start": 77,
+        "line_end": 77,
+        "importance": "must_fix",
+        "category": null,
+        "description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 1,
+      "label": {
+        "file": "sklearn/tests/test_pipeline.py",
+        "line_start": 2605,
+        "line_end": 2634,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "Reviewer asked for additional test cases: callbacks set directly on steps without auto-propagation, without memory enabled, and exercising passthrough steps with non-empty callback lists. Tests were added."
+      },
+      "reason": "no bot finding overlapped this location"
+    }
+  ]
+}

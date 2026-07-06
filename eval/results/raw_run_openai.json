@@ -1,0 +1,927 @@
+{
+  "meta": {
+    "n_cases": 21,
+    "n_labels": 18,
+    "specialist_model": "gpt-5.4-mini",
+    "synthesizer_model": "gpt-5.4-mini",
+    "total_seconds": 120.0,
+    "n_errors": 0
+  },
+  "cases": [
+    {
+      "case_id": "apache_airflow_53597",
+      "repo": "apache/airflow",
+      "pr_number": 53597,
+      "n_labels": 1,
+      "n_findings": 3,
+      "latency_seconds": 5.55,
+      "error": null,
+      "labels": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 26,
+          "line_end": 26,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 22,
+          "line_end": 48,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for form parsing and unsupported content-type handling in login body parser",
+          "explanation": "`parse_login_body` is new and contains distinct branches for JSON, form data, and unsupported content types, plus a validation-error path. Only the happy-path route test is added in this diff, so these branches are currently unverified."
+        },
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/common/headers.py",
+          "line_start": 78,
+          "line_end": 92,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Cover Content-Type header normalization and rejection paths",
+          "explanation": "The new `header_content_type_json_or_form_depends` dependency has branching logic for JSON, form, and unsupported content types. The diff does not show tests for these branches."
+        },
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/auth/managers/simple/utils.py",
+          "line_start": 23,
+          "line_end": 48,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "Validation errors are re-raised without preserving the original exception context",
+          "explanation": "`RequestValidationError(repr(e))` discards the structured Pydantic validation details and the original traceback/context, which makes debugging and error reporting harder. This helper is the new central parsing path for `/auth/token`, so losing the underlying validation information reduces maintainability."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "repo": "apache/airflow",
+      "pr_number": 59643,
+      "n_labels": 2,
+      "n_findings": 2,
+      "latency_seconds": 4.05,
+      "error": null,
+      "labels": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+          "line_start": 235,
+          "line_end": 241,
+          "importance": "must_fix",
+          "category": "security",
+          "description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead."
+        },
+        {
+          "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+          "line_start": 1027,
+          "line_end": 1033,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+          "line_start": 231,
+          "line_end": 246,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Missing tests for the new merge path when testing an existing connection",
+          "explanation": "The `/connections/test` handler now has a new branch that loads an existing connection, applies `update_orm_from_pydantic`, and falls back to constructing a new `Connection` on `AirflowNotFoundException`. This behavior is easy to regress because it changes how sensitive fields like password/extra are sourced and how missing connections are handled."
+        },
+        {
+          "file": "airflow-core/src/airflow/api_fastapi/core_api/routes/public/connections.py",
+          "line_start": 233,
+          "line_end": 243,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "Nested fallback logic makes the test endpoint harder to follow",
+          "explanation": "The new `try`/`except` inside the existing `try` block adds two separate construction paths for `conn` in the same function. This increases branching and makes the merge behavior for existing vs. new connections harder to reason about and maintain."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "repo": "apache/airflow",
+      "pr_number": 63530,
+      "n_labels": 1,
+      "n_findings": 2,
+      "latency_seconds": 3.52,
+      "error": null,
+      "labels": [
+        {
+          "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+          "line_start": 346,
+          "line_end": 346,
+          "importance": "nice_to_have",
+          "category": "security",
+          "description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge."
+        }
+      ],
+      "findings": [
+        {
+          "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+          "line_start": 342,
+          "line_end": 347,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for SQL assembly with non-default bulk-load options",
+          "explanation": "`bulk_load_custom` now interpolates `duplicate_key_handling` and `extra_options` directly into the SQL string and only parameterizes the file path. This changes the query construction and introduces a new branch of behavior that should be exercised to ensure the generated SQL and parameters are correct for both supported modes."
+        },
+        {
+          "file": "providers/mysql/tests/unit/mysql/hooks/test_mysql.py",
+          "line_start": 541,
+          "line_end": 554,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "New test duplicates existing bulk-load assertions",
+          "explanation": "This parametrized test repeats the same behavior already covered by the earlier `test_bulk_load_custom` and `test_bulk_load_custom_hook_lineage` cases, so it adds little new coverage and increases test maintenance burden."
+        }
+      ]
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "repo": "apache/airflow",
+      "pr_number": 6654,
+      "n_labels": 1,
+      "n_findings": 4,
+      "latency_seconds": 3.74,
+      "error": null,
+      "labels": [
+        {
+          "file": "tests/sensors/test_base_sensor.py",
+          "line_start": 524,
+          "line_end": 529,
+          "importance": "must_fix",
+          "category": "test_coverage",
+          "description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 141,
+          "line_end": 159,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for exponential backoff interval edge cases and timeout clamping",
+          "explanation": "The new `_get_next_poke_interval` helper introduces branching for `exponential_backoff`, hash-based interval calculation, and timeout clamping, but the current tests only cover a couple of nominal intervals. The edge cases around `try_number == 1`, large `try_number` values, and when the computed backoff exceeds the remaining timeout are untested."
+        },
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 140,
+          "line_end": 159,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "New backoff helper mixes interval calculation, logging, and timeout capping",
+          "explanation": "`_get_next_poke_interval` combines exponential-backoff math, timeout enforcement, and logging in one method. This makes the sensor timing logic harder to reason about and reuse, especially since it is now called from both reschedule and sleep paths."
+        },
+        {
+          "file": "tests/sensors/test_base_sensor.py",
+          "line_start": 523,
+          "line_end": 523,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Debug print left in test",
+          "explanation": "The added `print(started_at)` is noisy and unnecessary in a test, which makes the test output harder to read."
+        },
+        {
+          "file": "airflow/sensors/base_sensor_operator.py",
+          "line_start": 148,
+          "line_end": 154,
+          "severity": "medium",
+          "category": "security",
+          "title": "Use of SHA1 for backoff jitter calculation",
+          "explanation": "The new exponential backoff logic derives timing from a SHA1 hash. SHA1 is a weak hash function and should not be used for security-sensitive purposes."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_17583",
+      "repo": "django/django",
+      "pr_number": 17583,
+      "n_labels": 2,
+      "n_findings": 1,
+      "latency_seconds": 4.75,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/db/models/base.py",
+          "line_start": 784,
+          "line_end": 784,
+          "importance": "must_fix",
+          "category": null,
+          "description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields."
+        },
+        {
+          "file": "tests/model_fields/models.py",
+          "line_start": 505,
+          "line_end": 505,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/db/models/base.py",
+          "line_start": 781,
+          "line_end": 814,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for save() with deferred generated fields and foreign keys",
+          "explanation": "The save() logic now distinguishes generated fields from other deferred fields when deciding whether to auto-populate update_fields. This new branch is risky because it changes behavior for models that combine GeneratedField and ForeignKey fields, including the crash path fixed here."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_17730",
+      "repo": "django/django",
+      "pr_number": 17730,
+      "n_labels": 1,
+      "n_findings": 10,
+      "latency_seconds": 6.4,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 501,
+          "line_end": 501,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 491,
+          "line_end": 500,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for Expression.identity using constructor signature cache",
+          "explanation": "The identity computation now uses a cached class-level constructor signature and explicitly skips the bound `self` argument. This changes how positional/keyword defaults are bound and could regress identity generation for expressions with custom `__init__` signatures."
+        },
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 404,
+          "line_end": 410,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Cover replace_expressions early-return paths",
+          "explanation": "`replace_expressions()` now returns `self` when `replacements` is empty or when the expression has no source expressions. These new branches should be exercised to ensure leaf expressions and empty replacement maps are handled correctly."
+        },
+        {
+          "file": "django/db/models/sql/query.py",
+          "line_start": 975,
+          "line_end": 977,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Test Query.change_aliases no-op behavior for empty maps",
+          "explanation": "`change_aliases()` now short-circuits on an empty `change_map`. This new branch should be covered to verify it returns the same query object without mutating aliases."
+        },
+        {
+          "file": "django/db/models/sql/where.py",
+          "line_start": 207,
+          "line_end": 209,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Test WhereNode.relabel_aliases no-op behavior for empty maps",
+          "explanation": "`relabel_aliases()` now returns early when `change_map` is empty. This branch should be tested to ensure no children are traversed or mutated in the no-op case."
+        },
+        {
+          "file": "django/db/models/sql/where.py",
+          "line_start": 230,
+          "line_end": 236,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Cover WhereNode.replace_expressions early-return paths",
+          "explanation": "`replace_expressions()` now returns `self` when `replacements` is empty or when the node has no source expressions. These branches are easy to miss and should be verified."
+        },
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 490,
+          "line_end": 498,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Cached constructor signature adds extra indirection to identity computation",
+          "explanation": "`identity` now depends on the new `_constructor_signature` classproperty and manually skips the bound `self` argument. This makes the flow harder to follow than the previous direct `inspect.signature(self.__init__)` call and introduces a second layer of caching/indirection for a small optimization."
+        },
+        {
+          "file": "django/db/models/expressions.py",
+          "line_start": 404,
+          "line_end": 410,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Early-return branches duplicate the same no-op pattern",
+          "explanation": "`replace_expressions()` now has two separate early returns for empty `replacements` and empty source expressions. This is a small duplication of the same no-op guard pattern and slightly increases branching in a hot path."
+        },
+        {
+          "file": "django/db/models/sql/query.py",
+          "line_start": 975,
+          "line_end": 976,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "New fast-path return bypasses the existing relabeling flow",
+          "explanation": "The added `if not change_map: return self` introduces another early-exit branch in `change_aliases()`. While simple, it adds a separate control path to a method that already documents alias relabeling behavior, making the flow slightly less uniform."
+        },
+        {
+          "file": "django/db/models/sql/where.py",
+          "line_start": 207,
+          "line_end": 208,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Added no-op guard increases branching in alias relabeling",
+          "explanation": "`relabel_aliases()` now has an additional early return for empty `change_map`. This is a minor maintainability concern because it adds another branch to a method that already iterates over children and handles nested nodes."
+        },
+        {
+          "file": "django/db/models/sql/where.py",
+          "line_start": 229,
+          "line_end": 231,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Duplicate empty-input guard in replace_expressions",
+          "explanation": "`replace_expressions()` now repeats the same empty-input fast path added in `Expression.replace_expressions()`. The duplicated pattern across related methods makes the behavior slightly harder to maintain consistently."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_18433",
+      "repo": "django/django",
+      "pr_number": 18433,
+      "n_labels": 0,
+      "n_findings": 4,
+      "latency_seconds": 4.21,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "tests/view_tests/tests/test_debug.py",
+          "line_start": 1883,
+          "line_end": 1902,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for the new AUTH-sensitive header matching",
+          "explanation": "`test_request_meta_filtering()` now exercises several header names, but none of the assertions explicitly cover the newly added `AUTH` term in `SafeExceptionReporterFilter.hidden_settings` (e.g. a header whose name contains `AUTH` but not `TOKEN`/`KEY`/`SECRET`)."
+        },
+        {
+          "file": "tests/view_tests/tests/test_debug.py",
+          "line_start": 1922,
+          "line_end": 1923,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add a test for custom filter subclasses overriding hidden_settings",
+          "explanation": "`CustomExceptionReporterFilter.hidden_settings` changed from including `API|TOKEN|KEY|SECRET|PASS|SIGNATURE|DATABASE_URL` to only `PASS|DATABASE`. This removes coverage for the subclass-specific sensitive-key behavior that the previous test data exercised."
+        },
+        {
+          "file": "tests/view_tests/tests/test_debug.py",
+          "line_start": 1555,
+          "line_end": 1562,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Promoted test data to a class attribute without a clarifying name",
+          "explanation": "The new `sensitive_settings` class attribute is used only by two tests, but its name is generic and it now mixes request-setting names with values that are only relevant to the debug-page filtering behavior. This makes the test fixture less self-explanatory than the previous local lists."
+        },
+        {
+          "file": "tests/view_tests/tests/test_debug.py",
+          "line_start": 1925,
+          "line_end": 1925,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Custom filter regex no longer matches the documented sensitive-key patterns",
+          "explanation": "The overridden `hidden_settings` pattern was narrowed from several sensitive-key terms to only `PASS|DATABASE`. In this test helper, that makes the intent less clear because the custom filter no longer mirrors the broader sensitive-key behavior exercised elsewhere in the test class."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_21426",
+      "repo": "django/django",
+      "pr_number": 21426,
+      "n_labels": 1,
+      "n_findings": 2,
+      "latency_seconds": 3.41,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/core/cache/backends/db.py",
+          "line_start": 281,
+          "line_end": 282,
+          "importance": "must_fix",
+          "category": null,
+          "description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/core/cache/backends/db.py",
+          "line_start": 281,
+          "line_end": 284,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add a test for the new cull_num guard when remaining_num still exceeds max_entries",
+          "explanation": "The culling logic now skips the DELETE when `remaining_num // _cull_frequency` is zero, even if `remaining_num > _max_entries`. This new branch is easy to regress and is not directly covered by the existing test added in `tests/cache/tests.py`, which only asserts the high-frequency case through a specific cache setup."
+        },
+        {
+          "file": "django/core/cache/backends/db.py",
+          "line_start": 281,
+          "line_end": 284,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Culling condition now computes `cull_num` unconditionally",
+          "explanation": "`cull_num` is calculated before checking whether `remaining_num` exceeds `_max_entries`, which makes the control flow less direct than before. The logic is still correct, but the extra branching is harder to read and maintain than the previous single guard."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_21438",
+      "repo": "django/django",
+      "pr_number": 21438,
+      "n_labels": 1,
+      "n_findings": 3,
+      "latency_seconds": 4.17,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/utils/http.py",
+          "line_start": 200,
+          "line_end": 208,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests)."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/utils/http.py",
+          "line_start": 200,
+          "line_end": 208,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for split_header_value with quoted commas and non-comma separators",
+          "explanation": "The new helper is public and used by multiple cache/header parsers, but the current tests only cover simple token lists. The implementation intentionally skips empty parts and strips whitespace, yet its behavior with quoted values or alternate separators is not exercised in the diff."
+        },
+        {
+          "file": "django/utils/http.py",
+          "line_start": 211,
+          "line_end": 223,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for parse_etags whitespace and comma edge cases",
+          "explanation": "parse_etags now depends on split_header_value, changing how whitespace and empty segments are handled. The diff adds no direct tests for parse_etags itself, so regressions in ETag parsing could slip through."
+        },
+        {
+          "file": "django/utils/http.py",
+          "line_start": 200,
+          "line_end": 206,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Public helper lacks a docstring that explains its parsing limits clearly enough",
+          "explanation": "`split_header_value()` is a new public utility, but its docstring only briefly notes the intended header types. Since it is now reused across cache and middleware code, the contract around trimming, empty-part dropping, and the comma/quoted-string limitation should be stated more explicitly to avoid misuse."
+        }
+      ]
+    },
+    {
+      "case_id": "django_django_21448",
+      "repo": "django/django",
+      "pr_number": 21448,
+      "n_labels": 1,
+      "n_findings": 1,
+      "latency_seconds": 3.03,
+      "error": null,
+      "labels": [
+        {
+          "file": "django/core/mail/message.py",
+          "line_start": 363,
+          "line_end": 368,
+          "importance": "must_fix",
+          "category": null,
+          "description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky."
+        }
+      ],
+      "findings": [
+        {
+          "file": "django/core/mail/message.py",
+          "line_start": 363,
+          "line_end": 368,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Missing test for Bcc rejection via extra_headers attribute",
+          "explanation": "The new ValueError path only has coverage for passing `Bcc` in the `headers` constructor argument. The same branch also rejects `Bcc` when it appears in `extra_headers`, which is a separate entry point and should be exercised explicitly."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "repo": "encode/httpx",
+      "pr_number": 1349,
+      "n_labels": 1,
+      "n_findings": 4,
+      "latency_seconds": 3.62,
+      "error": null,
+      "labels": [
+        {
+          "file": "tests/models/test_url.py",
+          "line_start": 302,
+          "line_end": 304,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+        }
+      ],
+      "findings": [
+        {
+          "file": "httpx/_models.py",
+          "line_start": 108,
+          "line_end": 114,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add a test for raw IPv6 hosts that are already bracketed",
+          "explanation": "The new raw-URL constructor branch only normalizes unbracketed IPv6 hosts; bracketed hosts now follow a different path. This edge case is easy to regress and is not directly covered by the added tests."
+        },
+        {
+          "file": "httpx/_models.py",
+          "line_start": 350,
+          "line_end": 355,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add a test for copy_with() when replacing host on URLs without an explicit port",
+          "explanation": "The new IPv6 bracket-handling in copy_with() is only exercised with URLs that already have a port. The branch that formats netloc when port is None is still untested for IPv6 hosts."
+        },
+        {
+          "file": "httpx/_models.py",
+          "line_start": 191,
+          "line_end": 198,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "IPv6 host normalization logic is duplicated in multiple methods",
+          "explanation": "The new IPv6 bracket-stripping logic in `host()` mirrors the bracket-adding checks added in `__init__` and `copy_with()`. This repeated host-format handling makes the URL normalization rules harder to maintain consistently."
+        },
+        {
+          "file": "httpx/_models.py",
+          "line_start": 350,
+          "line_end": 354,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "IPv6 bracket handling is duplicated in `copy_with()`",
+          "explanation": "`copy_with()` now contains its own IPv6 detection and bracket-wrapping logic, which duplicates the same special-case handling introduced elsewhere in the file. Keeping this logic in one place would reduce the risk of inconsistent URL formatting."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_1469",
+      "repo": "encode/httpx",
+      "pr_number": 1469,
+      "n_labels": 1,
+      "n_findings": 2,
+      "latency_seconds": 7.73,
+      "error": null,
+      "labels": [
+        {
+          "file": "httpx/_transports/wsgi.py",
+          "line_start": 77,
+          "line_end": 77,
+          "importance": "must_fix",
+          "category": null,
+          "description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs."
+        }
+      ],
+      "findings": [
+        {
+          "file": "tests/test_wsgi.py",
+          "line_start": 124,
+          "line_end": 141,
+          "severity": "low",
+          "category": "test_coverage",
+          "title": "Add coverage for WSGI SERVER_PORT fallback when URL has no explicit port",
+          "explanation": "The transport now synthesizes a default port for HTTP/HTTPS URLs when `port is None` in `httpx/_transports/wsgi.py`, but the new test only covers the happy-path values and does not exercise the branch where the port is inferred from the scheme. A regression here would leave the new fallback logic unverified."
+        },
+        {
+          "file": "tests/test_wsgi.py",
+          "line_start": 126,
+          "line_end": 126,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Type annotation for `expected_server_port` does not match parametrized values",
+          "explanation": "The test parameter is annotated as `int`, but all parametrized values are strings. This makes the signature misleading and can confuse readers or type checkers."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_2911",
+      "repo": "encode/httpx",
+      "pr_number": 2911,
+      "n_labels": 0,
+      "n_findings": 2,
+      "latency_seconds": 4.21,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "httpx/_models.py",
+          "line_start": 761,
+          "line_end": 761,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for JSON decoding of non-UTF-8 encoded response bodies",
+          "explanation": "`Response.json()` now always passes raw bytes to `json.loads`, removing the previous charset/BOM detection path. The existing diff only updates a few utility tests, but it does not cover the new behavior for UTF-16/UTF-32 or BOM-prefixed payloads through the public `Response.json()` API."
+        },
+        {
+          "file": "httpx/_models.py",
+          "line_start": 761,
+          "line_end": 761,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "`Response.json()` now bypasses text decoding logic entirely",
+          "explanation": "The new implementation calls `jsonlib.loads(self.content, **kwargs)` directly, removing the previous charset/BOM handling path. This makes the method\u2019s behavior less explicit and shifts encoding handling into the JSON library, which is harder to reason about and maintain than the dedicated decoding branch."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_3460",
+      "repo": "encode/httpx",
+      "pr_number": 3460,
+      "n_labels": 0,
+      "n_findings": 1,
+      "latency_seconds": 2.94,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": ".github/workflows/test-suite.yml",
+          "line_start": 17,
+          "line_end": 17,
+          "severity": "low",
+          "category": "test_coverage",
+          "title": "Add coverage for the new Python 3.13 CI target",
+          "explanation": "The workflow now runs the test suite on Python 3.13, but the diff does not show any 3.13-specific test coverage or validation of compatibility regressions introduced by the new interpreter version."
+        }
+      ]
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "repo": "encode/httpx",
+      "pr_number": 780,
+      "n_labels": 1,
+      "n_findings": 3,
+      "latency_seconds": 5.54,
+      "error": null,
+      "labels": [
+        {
+          "file": "httpx/config.py",
+          "line_start": 337,
+          "line_end": 338,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call."
+        }
+      ],
+      "findings": [
+        {
+          "file": "httpx/config.py",
+          "line_start": 329,
+          "line_end": 338,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for proxy credential handling and header generation",
+          "explanation": "The new proxy-authentication branch strips userinfo from the URL and injects a Proxy-Authorization header, but only the happy-path URL case is covered in the diff. The encoding and header insertion logic should be exercised directly, including username/password URLs and the no-credentials path."
+        },
+        {
+          "file": "httpx/config.py",
+          "line_start": 340,
+          "line_end": 343,
+          "severity": "low",
+          "category": "test_coverage",
+          "title": "Cover build_auth_header edge cases",
+          "explanation": "The new build_auth_header helper is untested in the diff. Its UTF-8/base64 encoding behavior should be verified, especially for non-ASCII usernames/passwords and empty password handling."
+        },
+        {
+          "file": "httpx/config.py",
+          "line_start": 334,
+          "line_end": 339,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "Proxy auth header construction is split across constructor and helper",
+          "explanation": "`Proxy.__init__` now mixes URL normalization with proxy-auth header generation, and the new `build_auth_header` helper is only used once. This adds a small amount of indirection without improving reuse, making the proxy initialization path slightly harder to follow."
+        }
+      ]
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "repo": "home-assistant/core",
+      "pr_number": 88276,
+      "n_labels": 1,
+      "n_findings": 1,
+      "latency_seconds": 3.38,
+      "error": null,
+      "labels": [
+        {
+          "file": "homeassistant/components/calendar/__init__.py",
+          "line_start": 389,
+          "line_end": 390,
+          "importance": "must_fix",
+          "category": "test_coverage",
+          "description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "homeassistant/components/calendar/__init__.py",
+          "line_start": 389,
+          "line_end": 389,
+          "severity": "low",
+          "category": "test_coverage",
+          "title": "Add coverage for reversed date range rejection",
+          "explanation": "The new `start_date > end_date` guard returns `400 Bad Request`, but this branch is only covered indirectly by the added test in the HTTP API suite. The change in the handler itself should be exercised with a test that verifies reversed `start`/`end` parameters are rejected before `async_get_events` is called."
+        }
+      ]
+    },
+    {
+      "case_id": "pydantic_pydantic_2532",
+      "repo": "pydantic/pydantic",
+      "pr_number": 2532,
+      "n_labels": 0,
+      "n_findings": 1,
+      "latency_seconds": 3.97,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "pydantic/main.py",
+          "line_start": 251,
+          "line_end": 256,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for class-creation config kwargs filtering and conflict handling",
+          "explanation": "The new `allowed_config_kwargs` logic changes which keyword arguments are treated as config during model class creation. This branch should be exercised for both accepted custom config attributes and ignored dunder attributes, as well as the existing ambiguity error when both `Config` and class kwargs are supplied."
+        }
+      ]
+    },
+    {
+      "case_id": "pydantic_pydantic_2536",
+      "repo": "pydantic/pydantic",
+      "pr_number": 2536,
+      "n_labels": 0,
+      "n_findings": 1,
+      "latency_seconds": 19.72,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "pydantic/schema.py",
+          "line_start": 811,
+          "line_end": 815,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add coverage for Literal enum-member schema branch",
+          "explanation": "The new `is_literal_type(field_type)` branch now handles `Literal[EnumMember]` by emitting both `enum` and the underlying type via `add_field_type_to_schema`. This path is distinct from the existing `Enum` branch and should be exercised for non-string enums as well as string enums to ensure the generated schema includes the correct `type` and `enum` values."
+        }
+      ]
+    },
+    {
+      "case_id": "pydantic_pydantic_3542",
+      "repo": "pydantic/pydantic",
+      "pr_number": 3542,
+      "n_labels": 0,
+      "n_findings": 2,
+      "latency_seconds": 3.47,
+      "error": null,
+      "labels": [],
+      "findings": [
+        {
+          "file": "pydantic/main.py",
+          "line_start": 454,
+          "line_end": 474,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for the new `models_as_dict` JSON path and its fallback behavior",
+          "explanation": "`BaseModel.json()` now accepts `models_as_dict` and passes it through to `_iter()`, changing how nested models are serialized. The diff adds one example test, but there is no direct coverage here for the default `models_as_dict=True` behavior versus `False`, or for the interaction with custom encoders on nested `BaseModel` values."
+        },
+        {
+          "file": "docs/usage/exporting_models.md",
+          "line_start": 112,
+          "line_end": 114,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "New documentation paragraph is awkwardly phrased and redundant",
+          "explanation": "The added text repeats the default behavior and uses slightly unclear wording (\u201cserialise them differently\u201d, \u201cadd the classes of the model\u201d), which makes the guidance harder to read than necessary."
+        }
+      ]
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_23299",
+      "repo": "scikit-learn/scikit-learn",
+      "pr_number": 23299,
+      "n_labels": 1,
+      "n_findings": 2,
+      "latency_seconds": 16.76,
+      "error": null,
+      "labels": [
+        {
+          "file": "sklearn/feature_selection/_from_model.py",
+          "line_start": 393,
+          "line_end": 393,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated."
+        }
+      ],
+      "findings": [
+        {
+          "file": "sklearn/feature_selection/_from_model.py",
+          "line_start": 389,
+          "line_end": 416,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for `partial_fit` feature-name validation branches",
+          "explanation": "`partial_fit` now conditionally copies `feature_names_in_` from the wrapped estimator or falls back to `_check_feature_names(X, reset=first_call)`. The new branch behavior is only partially covered by the added frame/non-frame test and does not exercise the error path when feature names are inconsistent across successive `partial_fit` calls."
+        },
+        {
+          "file": "sklearn/feature_selection/_from_model.py",
+          "line_start": 315,
+          "line_end": 345,
+          "severity": "low",
+          "category": "maintainability",
+          "title": "New helper `_check_max_features` lacks a docstring",
+          "explanation": "`_check_max_features` is a new private method extracted from `fit`/`partial_fit`, but it has no docstring. Even private helpers benefit from a short description here because it encapsulates validation logic used by multiple public methods."
+        }
+      ]
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "repo": "scikit-learn/scikit-learn",
+      "pr_number": 33787,
+      "n_labels": 2,
+      "n_findings": 5,
+      "latency_seconds": 5.82,
+      "error": null,
+      "labels": [
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 1577,
+          "line_end": 1594,
+          "importance": "nice_to_have",
+          "category": "maintainability",
+          "description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication."
+        },
+        {
+          "file": "sklearn/tests/test_pipeline.py",
+          "line_start": 2605,
+          "line_end": 2634,
+          "importance": "nice_to_have",
+          "category": "test_coverage",
+          "description": "Reviewer asked for additional test cases: callbacks set directly on steps without auto-propagation, without memory enabled, and exercising passthrough steps with non-empty callback lists. Tests were added."
+        }
+      ],
+      "findings": [
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 622,
+          "line_end": 645,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Add tests for pipeline-level callback hooks around fit and fit_transform entry/exit",
+          "explanation": "`fit()` now creates a callback context and emits root `call_on_fit_task_begin/end` events, and `fit_transform()` does the same with a distinct task name. These new public code paths should be covered for both normal and passthrough-final-estimator cases to ensure the hooks fire exactly once and in the expected order."
+        },
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 853,
+          "line_end": 874,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Cover fit_predict callback propagation and final-estimator hook handling",
+          "explanation": "`fit_predict()` now wraps the final estimator in a propagated callback context and emits begin/end hooks around `fit_predict`. This new branch is not exercised by the added tests and is easy to regress because it differs from `fit()`/`fit_transform()` control flow."
+        },
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 1577,
+          "line_end": 1598,
+          "severity": "medium",
+          "category": "test_coverage",
+          "title": "Test callback-aware cached transformer wrapper and passthrough branch in _fit",
+          "explanation": "The new `_fit_transform_one_with_callbacks` wrapper adds callback propagation around cached transformer fitting, and `_fit()` now calls `subcontext.call_on_fit_task_begin/end` for passthrough steps. These branches are subtle and should be tested directly through a cached pipeline with a passthrough intermediate step."
+        },
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 517,
+          "line_end": 645,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "`fit` now mixes callback setup, routing, and final-estimator handling in one long method",
+          "explanation": "The added callback plumbing makes `Pipeline.fit` substantially longer and more branchy, with repeated begin/end handling for passthrough vs. non-passthrough final estimators. This increases maintenance burden and makes the control flow harder to follow."
+        },
+        {
+          "file": "sklearn/pipeline.py",
+          "line_start": 707,
+          "line_end": 760,
+          "severity": "medium",
+          "category": "maintainability",
+          "title": "`fit_transform` duplicates callback lifecycle logic from `fit`",
+          "explanation": "The new callback begin/end and subcontext handling in `fit_transform` closely mirrors the logic added to `fit`, but with slightly different final-estimator branches. This duplication will be hard to keep consistent as callback behavior evolves."
+        }
+      ]
+    }
+  ]
+}

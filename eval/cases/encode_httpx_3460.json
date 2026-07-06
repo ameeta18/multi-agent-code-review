@@ -1,0 +1,57 @@
+{
+  "repo": "encode/httpx",
+  "pr_number": 3460,
+  "url": "https://github.com/encode/httpx/pull/3460",
+  "diff": "diff --git a/.github/workflows/test-suite.yml b/.github/workflows/test-suite.yml\n--- a/.github/workflows/test-suite.yml\n+++ b/.github/workflows/test-suite.yml\n@@ -14,7 +14,7 @@ jobs:\n \n     strategy:\n       matrix:\n-        python-version: [\"3.8\", \"3.9\", \"3.10\", \"3.11\", \"3.12\"]\n+        python-version: [\"3.8\", \"3.9\", \"3.10\", \"3.11\", \"3.12\", \"3.13\"]\n \n     steps:\n       - uses: \"actions/checkout@v4\"\ndiff --git a/pyproject.toml b/pyproject.toml\n--- a/pyproject.toml\n+++ b/pyproject.toml\n@@ -25,6 +25,7 @@ classifiers = [\n     \"Programming Language :: Python :: 3.10\",\n     \"Programming Language :: Python :: 3.11\",\n     \"Programming Language :: Python :: 3.12\",\n+    \"Programming Language :: Python :: 3.13\",\n     \"Topic :: Internet :: WWW/HTTP\",\n ]\n dependencies = [",
+  "labeled_issues": [],
+  "reviewer_comments": [
+    {
+      "author": "zanieb",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "Why did this change? I don't think it should?"
+    },
+    {
+      "author": "hugovk",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "It was so I could run the CI on my feature branch and be confident it passes before opening a PR."
+    },
+    {
+      "author": "zanieb",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "\ud83d\udc4d could you revert it? I think this should be covered by the `pull_request` target."
+    },
+    {
+      "author": "zanieb",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "Separately, we could add a `workflow_dispatch` trigger so it can be invoked on fork branches manually?"
+    },
+    {
+      "author": "hugovk",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "Yeah, happy to revert it. It just means next time I'll either make my changes directly on my `main` (not recommended) or not bother contributing (also not recommended :)\r\n\r\n`pull_request` alone doesn't cover it: if I push changes to my fork, the CI won't run.\r\n\r\n`workflow_dispatch` is good to have anyway, but I don't want to have to manually and tediously click buttons to trigger builds each and every time."
+    },
+    {
+      "author": "zanieb",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "Usually I just open a pull request in my fork for CI if I need to test it before opening a real pull request.\r\n\r\nI'm not sure exactly what the conditions cause this, but having `push` without a filter _and_ `pull_request` can run jobs _twice_ on each pull request commit e.g. https://github.com/astral-sh/python-build-standalone/pull/445/commits/accb28c1005486c11b3830852f2618c284a9cfa6\r\n\r\n<img width=\"1281\" alt=\"Screenshot 2024-12-23 at 1 16 17\u202fPM\" src=\"https://github.com/user-attachments/assets/615a00a2-52b6-4422-ba10-235a0e3d78c4\" />\r\n"
+    },
+    {
+      "author": "hugovk",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "Yeah, creating a PR in your own fork is possible, it's still an extra impediment to contribution. This project's contribution guidelines shown how to test locally, which is good.\r\n\r\nBut we get all these free CI minutes, I'm a big fan of CIs, and my opinion is we should encourage people to test on CI and make it easy for them. No \"works on my machine\". Let me easily test all the Python version, all the operating systems, all the build steps in a clean CI environment. Let's have good \"DX\".\r\n\r\nAnd it's possible to add config to prevent those double runs on upstream, I can look it up if you like.\r\n\r\nAnyway, I've reverted this change."
+    },
+    {
+      "author": "zanieb",
+      "file": ".github/workflows/test-suite.yml",
+      "line": 6,
+      "body": "> And it's possible to add config to prevent those double runs on upstream, I can look it up if you like.\r\n\r\nI'm open to a proposal. My main reactions are that it doesn't belong in this pull request / limiting to the main branch is the standard pattern in all the repositories I work in. I agree making it easy for developers to test in CI is nice though :)"
+    }
+  ]
+}

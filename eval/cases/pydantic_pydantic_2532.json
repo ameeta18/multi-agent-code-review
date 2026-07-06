@@ -1,0 +1,27 @@
+{
+  "repo": "pydantic/pydantic",
+  "pr_number": 2532,
+  "url": "https://github.com/pydantic/pydantic/pull/2532",
+  "diff": "diff --git a/changes/2532-uriyyo.md b/changes/2532-uriyyo.md\n--- a/changes/2532-uriyyo.md\n+++ b/changes/2532-uriyyo.md\n@@ -0,0 +1,2 @@\n+Fix bug with configurations declarations that are passed as\n+keyword arguments during class creation.\n\\ No newline at end of file\ndiff --git a/pydantic/main.py b/pydantic/main.py\n--- a/pydantic/main.py\n+++ b/pydantic/main.py\n@@ -248,7 +248,12 @@ def __new__(mcs, name, bases, namespace, **kwargs):  # noqa C901\n                 class_vars.update(base.__class_vars__)\n                 hash_func = base.__hash__\n \n-        config_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & BaseConfig.__dict__.keys()}\n+        allowed_config_kwargs: SetStr = {\n+            key\n+            for key in dir(config)\n+            if not (key.startswith('__') and key.endswith('__'))  # skip dunder methods and attributes\n+        }\n+        config_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & allowed_config_kwargs}\n         config_from_namespace = namespace.get('Config')\n         if config_kwargs and config_from_namespace:\n             raise TypeError('Specifying config in two places is ambiguous, use either Config attribute or class kwargs')\ndiff --git a/tests/test_main.py b/tests/test_main.py\n--- a/tests/test_main.py\n+++ b/tests/test_main.py\n@@ -7,6 +7,7 @@\n import pytest\n \n from pydantic import (\n+    BaseConfig,\n     BaseModel,\n     ConfigError,\n     Extra,\n@@ -1734,3 +1735,14 @@ class Model(BaseModel, extra='allow'):\n \n             class Config:\n                 extra = 'forbid'\n+\n+\n+def test_class_kwargs_custom_config():\n+    class Base(BaseModel):\n+        class Config(BaseConfig):\n+            some_config = 'value'\n+\n+    class Model(Base, some_config='new_value'):\n+        a: int\n+\n+    assert Model.__config__.some_config == 'new_value'",
+  "labeled_issues": [],
+  "reviewer_comments": [
+    {
+      "author": "PrettyWood",
+      "file": "pydantic/main.py",
+      "line": 256,
+      "body": "```suggestion\r\n        allowed_config_kwargs: SetStr = {\r\n            key\r\n            for key in dir(config)\r\n            if not (key.startswith('__') and key.endswith('__'))  # skip dunder methods and attributes\r\n        }\r\n        config_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & allowed_config_kwargs}\r\n```"
+    },
+    {
+      "author": "PrettyWood",
+      "file": "changes/2532-uriyyo.md",
+      "line": 1,
+      "body": "Do you think you could improve the text to make it more explicit please?"
+    },
+    {
+      "author": "uriyyo",
+      "file": "changes/2532-uriyyo.md",
+      "line": 1,
+      "body": "Done. Could you please recheck text?"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "repo": "django/django",
+  "pr_number": 21426,
+  "url": "https://github.com/django/django/pull/21426",
+  "diff": "diff --git a/django/core/cache/backends/db.py b/django/core/cache/backends/db.py\n--- a/django/core/cache/backends/db.py\n+++ b/django/core/cache/backends/db.py\n@@ -278,8 +278,8 @@ def _cull(self, db, cursor, now, num):\n             )\n             deleted_count = cursor.rowcount\n             remaining_num = num - deleted_count\n-            if remaining_num > self._max_entries:\n-                cull_num = remaining_num // self._cull_frequency\n+            cull_num = remaining_num // self._cull_frequency\n+            if cull_num > 0 and remaining_num > self._max_entries:\n                 cursor.execute(\n                     connection.ops.cache_key_culling_sql() % table, [cull_num]\n                 )\ndiff --git a/tests/cache/tests.py b/tests/cache/tests.py\n--- a/tests/cache/tests.py\n+++ b/tests/cache/tests.py\n@@ -1361,6 +1361,24 @@ def test_no_query_without_check(self):\n                 )\n                 self.assertEqual(num_count_queries, 0)\n \n+    def test_delete_query_skipped_on_high_cull_frequency(self):\n+        cull_delete_cache = caches[\"cull\"]\n+        old_cull_freq = cull_delete_cache._cull_frequency\n+\n+        # CULL_FREQUENCY > MAX_ENTRIES forces\n+        # (remaining_num // CULL_FREQUENCY) to evaluate to zero (cull_num)\n+        cull_delete_cache._cull_frequency = cull_delete_cache._max_entries * 2\n+        self.addCleanup(setattr, cull_delete_cache, \"_cull_frequency\", old_cull_freq)\n+\n+        self._perform_cull_test(\"cull\", 50, 49)\n+\n+        with CaptureQueriesContext(connection) as captured_queries:\n+            cull_delete_cache.set(\"force_cull\", \"value\")\n+\n+        # Only the expiration DELETE query runs; culling is skipped.\n+        num_delete_queries = sum(\"DELETE\" in query[\"sql\"] for query in captured_queries)\n+        self.assertEqual(num_delete_queries, 1)\n+\n     def test_delete_cursor_rowcount(self):\n         \"\"\"\n         The rowcount attribute should not be checked on a closed cursor.",
+  "labeled_issues": [
+    {
+      "file": "django/core/cache/backends/db.py",
+      "line_start": 281,
+      "line_end": 282,
+      "importance": "must_fix",
+      "category": null,
+      "description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "vishy0",
+      "file": "tests/cache/tests.py",
+      "line": 1318,
+      "body": "As per ticket, should this be specifically just greater than `MAX_ENTRIES + 1` value?"
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "django/core/cache/backends/db.py",
+      "line": 275,
+      "body": "Let's do an explicit `cull_num > 0` check, since it could be negative (the count and the num are not fetched at the same time). In fact, I think it's worth adding a test for this case."
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "tests/cache/tests.py",
+      "line": 1370,
+      "body": "Instead of the finally clause below, please use instead addCleanup, e.g.\n```py\nself.addCleanup(setattr, cull_delete_cache, \"_cull_frequency\", old_cull_freq)\n```"
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "tests/cache/tests.py",
+      "line": 1313,
+      "body": "As you point out below, there is one delete query still, so this might need a more accurate name."
+    },
+    {
+      "author": "jacobtylerwalls",
+      "file": "django/core/cache/backends/db.py",
+      "line": 275,
+      "body": "Great. On second look, I don't think a negative max_entries is realistic, so I removed the test."
+    },
+    {
+      "author": "vishy0",
+      "file": "django/core/cache/backends/db.py",
+      "line": 275,
+      "body": "I was wondering, I missed while making commit!\r\nAlso, it's same I thought of at which point could it be negative! and I just made the cull frequency negative. "
+    }
+  ]
+}

@@ -1,0 +1,506 @@
+{
+  "instructions": "For each candidate, set 'same_issue' to true if the bot finding identifies the SAME problem as the label (not merely the same lines). Set false if it's a different problem at the same location. Then run: score_eval.py --score",
+  "line_tolerance": 3,
+  "candidates": [
+    {
+      "case_id": "apache_airflow_53597",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        26,
+        26
+      ],
+      "label_description": "parse_login_body took a raw FastAPI Request and parsed the Content-Type manually, which is opaque to FastAPI's OpenAPI schema generation and diverges from the project's typed Header-dependency pattern. Reviewer recommended specifying the allowed MIME type via a Header dependency (per the existing headers.py convention) and adding a Mimetype Enum; author implemented header_content_type_json_or_form_depends and the FORM enum. Pattern/consistency improvement on working code, not a merge blocker.",
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        29,
+        48
+      ],
+      "finding_title": "New public function `parse_login_body` lacks comprehensive test coverage",
+      "finding_explanation": "The new `parse_login_body` function handles multiple content types and error cases but has limited test coverage. The function contains three distinct code paths: JSON parsing, form parsing, and unsupported media type handling. Additionally, it catches ValidationError and converts it to RequestValidationError, which is an error-handling path that should be tested.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        216,
+        245
+      ],
+      "finding_title": "Missing test coverage for exception handling in nested try-except block",
+      "finding_explanation": "The inner try-except block (lines 217-228) catches AirflowNotFoundException but there is no test case that verifies the behavior when Connection.get_connection_from_secrets() raises this exception. The test suite only covers the success path where an existing connection is found and merged, but not the fallback path where the exception is caught and a new connection is created from scratch.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        215,
+        245
+      ],
+      "finding_title": "Nested try-except block reduces readability",
+      "finding_explanation": "The test_connection function now contains a nested try-except block (lines 235-245) that handles two different code paths for creating a Connection object. This nested structure increases cyclomatic complexity and makes the function harder to follow. The logic could be simplified by extracting the connection creation into a separate helper function.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "security",
+      "label_importance": "must_fix",
+      "label_lines": [
+        235,
+        241
+      ],
+      "label_description": "test_connection read the connection only from the database, so connections defined in a secrets backend could not be tested via the API; reviewer required using get_connection_from_secrets instead.",
+      "finding_category": "security",
+      "finding_severity": "high",
+      "finding_lines": [
+        238,
+        240
+      ],
+      "finding_title": "Potential Information Disclosure via Environment Variable",
+      "finding_explanation": "The code stores the connection URI in an environment variable (os.environ[conn_env_var]) which may be exposed through process inspection, logs, or debugging tools. This could leak sensitive credentials like passwords, API keys, or tokens contained in the connection URI.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "security",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        346,
+        346
+      ],
+      "label_description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        345,
+        348
+      ],
+      "finding_title": "String interpolation of SQL parameters without validation",
+      "finding_explanation": "The code now directly interpolates `duplicate_key_handling` and `extra_options` into the SQL statement using f-strings instead of parameterized queries. This removes the protection of parameterized queries for these values. If these parameters come from untrusted sources, this could be a SQL injection vulnerability.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "security",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        346,
+        346
+      ],
+      "label_description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        345,
+        348
+      ],
+      "finding_title": "SQL string interpolation with user-provided values",
+      "finding_explanation": "The refactored code now directly interpolates `duplicate_key_handling` and `extra_options` into the SQL string using f-string formatting instead of parameterized queries. This bypasses SQL parameter binding and could introduce SQL injection vulnerabilities if these values are not properly validated upstream. The original parameterized approach was safer.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_63530",
+      "label_index": 0,
+      "finding_index": 3,
+      "label_category": "security",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        346,
+        346
+      ],
+      "label_description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge.",
+      "finding_category": "security",
+      "finding_severity": "critical",
+      "finding_lines": [
+        345,
+        347
+      ],
+      "finding_title": "SQL Injection via String Interpolation",
+      "finding_explanation": "The SQL statement now directly interpolates `duplicate_key_handling` and `extra_options` into the SQL string using f-string formatting instead of using parameterized queries. This allows arbitrary SQL injection if these parameters contain malicious input. The original code correctly used placeholders (%s) with separate parameters, but the new code embeds user-controlled values directly into the SQL statement.",
+      "same_issue": true
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "test_coverage",
+      "label_importance": "must_fix",
+      "label_lines": [
+        524,
+        529
+      ],
+      "label_description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added.",
+      "finding_category": "test_coverage",
+      "finding_severity": "low",
+      "finding_lines": [
+        527,
+        536
+      ],
+      "finding_title": "Test contains debug print statement",
+      "finding_explanation": "Line 529 contains a print statement ('print(started_at)') which appears to be debug code left in the test.",
+      "same_issue": false
+    },
+    {
+      "case_id": "apache_airflow_6654",
+      "label_index": 0,
+      "finding_index": 4,
+      "label_category": "test_coverage",
+      "label_importance": "must_fix",
+      "label_lines": [
+        524,
+        529
+      ],
+      "label_description": "Tests for the exponential-backoff interval re-ran the implementation rather than asserting concrete expected values; maintainer required mocking time and adding tests with exact expected intervals, and pushed back when they were not added.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        527,
+        528
+      ],
+      "finding_title": "Debug print statement left in test code",
+      "finding_explanation": "Line 528 contains a print statement 'print(started_at)' which appears to be debug code that should be removed from production test files.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        784,
+        784
+      ],
+      "label_description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields.",
+      "finding_category": "maintainability",
+      "finding_severity": "medium",
+      "finding_lines": [
+        784,
+        788
+      ],
+      "finding_title": "Inline set comprehension reduces readability",
+      "finding_explanation": "The variable `deferred_non_generated_fields` is assigned a complex set comprehension inline (lines 784-788) that filters concrete fields. This logic was previously abstracted into a method call `self.get_deferred_fields()`. While the new logic is more specific, the inline comprehension reduces maintainability by embedding field-filtering logic directly in the save method. This makes the method harder to understand at a glance and duplicates filtering logic that could be reused elsewhere.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_17730",
+      "label_index": 0,
+      "finding_index": 3,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        501,
+        501
+      ],
+      "label_description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        502,
+        505
+      ],
+      "finding_title": "Modified identity property logic not fully tested",
+      "finding_explanation": "The identity property was refactored to use _constructor_signature and skip the first argument via next(arguments) (lines 502-505). This change in how arguments are processed needs test coverage to ensure identity values are computed correctly.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21426",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        281,
+        282
+      ],
+      "label_description": "cull_num could be negative because the row count and num are not fetched atomically; reviewer required an explicit cull_num > 0 guard before running the culling query.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        281,
+        282
+      ],
+      "finding_title": "Missing test for division by zero protection",
+      "finding_explanation": "The code now calculates `cull_num = remaining_num // self._cull_frequency` before checking if `cull_num > 0`. While the new condition prevents executing the SQL when `cull_num` is 0, there's no test coverage for the edge case where `remaining_num` is less than `self._cull_frequency`, which results in `cull_num == 0`. The added test only covers the specific scenario where `_cull_frequency` is very high, but doesn't verify the behavior when `remaining_num` is small relative to `_cull_frequency` in normal operation.",
+      "same_issue": false
+    },
+    {
+      "case_id": "django_django_21438",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "test_coverage",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        200,
+        208
+      ],
+      "label_description": "New split_header_value helper lacked dedicated unit tests; reviewer asked for them and they were added (SplitHeaderValueTests).",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        200,
+        209
+      ],
+      "finding_title": "New public function split_header_value lacks comprehensive error handling tests",
+      "finding_explanation": "The new split_header_value() function is a public utility that accepts user input (header values). While basic tests exist, there are no tests for edge cases like None input, non-string types, or extremely long strings that could cause performance issues.",
+      "same_issue": true
+    },
+    {
+      "case_id": "django_django_21448",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        363,
+        368
+      ],
+      "label_description": "A Bcc header passed via headers/extra_headers was silently ignored; reviewer required raising ValueError instead, since silently dropping caller-supplied Bcc recipients is incorrect and risky.",
+      "finding_category": "maintainability",
+      "finding_severity": "low",
+      "finding_lines": [
+        363,
+        369
+      ],
+      "finding_title": "Variable assignment used only once",
+      "finding_explanation": "The variable 'header' is assigned on line 363 but only used in the condition on line 364. While this is a minor optimization, it adds a line of code for a single-use variable. The original approach of calling name.lower() inline in the condition was more concise.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_1469",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": null,
+      "label_importance": "must_fix",
+      "label_lines": [
+        77,
+        77
+      ],
+      "label_description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        77,
+        78
+      ],
+      "finding_title": "Missing error handling for unsupported schemes",
+      "finding_explanation": "The code uses a dictionary lookup on `scheme` without handling the case where an unsupported scheme is provided. If a scheme other than b'http' or b'https' is passed, a KeyError will be raised. This error path is not tested.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        341,
+        343
+      ],
+      "finding_title": "Missing test coverage for build_auth_header method",
+      "finding_explanation": "The new `build_auth_header` method is a public method that handles authentication credential encoding. While there is a parametrized test that indirectly exercises this method through the Proxy constructor, there is no direct test of the method itself. This leaves edge cases untested, such as special characters in username/password, empty credentials, or non-UTF-8 encoding scenarios.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 1,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "test_coverage",
+      "finding_severity": "medium",
+      "finding_lines": [
+        328,
+        335
+      ],
+      "finding_title": "Missing test coverage for credential extraction and URL sanitization",
+      "finding_explanation": "The code that extracts credentials from the URL and removes userinfo from the URL authority (lines 328-335) is only tested through one parametrized case. Edge cases are not covered, such as: URL with only username (no password), URL with only password (no username), or special characters in credentials that might affect URL parsing.",
+      "same_issue": false
+    },
+    {
+      "case_id": "encode_httpx_780",
+      "label_index": 0,
+      "finding_index": 2,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        337,
+        338
+      ],
+      "label_description": "Manual two-line removal of userinfo from the proxy URL could be simplified to a single copy_with(username=None, password=None) call.",
+      "finding_category": "security",
+      "finding_severity": "high",
+      "finding_lines": [
+        341,
+        343
+      ],
+      "finding_title": "Credentials embedded in proxy URL are exposed in logs and error messages",
+      "finding_explanation": "While the code removes credentials from the URL object after extracting them, the original URL containing username and password may still be logged, cached, or exposed through error messages before this sanitization occurs. Additionally, credentials passed as URL parameters are inherently less secure than using dedicated authentication mechanisms. The base64 encoding of credentials in the Proxy-Authorization header is standard but provides no encryption - credentials are easily decoded if intercepted.",
+      "same_issue": false
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 0,
+      "finding_index": 0,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        1577,
+        1594
+      ],
+      "label_description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication.",
+      "finding_category": "test_coverage",
+      "finding_severity": "high",
+      "finding_lines": [
+        1577,
+        1600
+      ],
+      "finding_title": "New public function _fit_transform_one_with_callbacks lacks error handling tests",
+      "finding_explanation": "The new function _fit_transform_one_with_callbacks (lines 1577-1600) wraps callback context management around transformer fitting. There are no visible tests for error paths: what happens if callback_ctx.propagate_callback_context() fails, if callback_ctx.call_on_fit_task_begin() raises an exception, or if _fit_transform_one() fails after callbacks are initiated. These exception paths need test coverage.",
+      "same_issue": false
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 0,
+      "finding_index": 4,
+      "label_category": "maintainability",
+      "label_importance": "nice_to_have",
+      "label_lines": [
+        1577,
+        1594
+      ],
+      "label_description": "The new _fit_transform_one_with_callbacks duplicated logic from _fit_transform_one; reviewer suggested extracting a shared private method to avoid the duplication.",
+      "finding_category": "maintainability",
+      "finding_severity": "high",
+      "finding_lines": [
+        1577,
+        1600
+      ],
+      "finding_title": "New function _fit_transform_one_with_callbacks lacks docstring",
+      "finding_explanation": "The new public/internal function _fit_transform_one_with_callbacks (lines 1577-1600) is missing a docstring. While there is a TODO comment indicating it should be merged with _fit_transform_one, the function is currently a standalone utility that should be documented to explain its purpose, parameters, and return value.",
+      "same_issue": false
+    }
+  ],
+  "auto_misses": [
+    {
+      "case_id": "apache_airflow_59643",
+      "label_index": 1,
+      "label": {
+        "file": "airflow-core/tests/unit/api_fastapi/core_api/routes/public/test_connections.py",
+        "line_start": 1027,
+        "line_end": 1033,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New tests did not actually verify the merged credential behavior (password/extra) and lacked assertions that the DB connection was not mutated; reviewer required capturing the used values and adding non-mutation assertions."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "django_django_17583",
+      "label_index": 1,
+      "label": {
+        "file": "tests/model_fields/models.py",
+        "line_start": 505,
+        "line_end": 505,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "encode_httpx_1349",
+      "label_index": 0,
+      "label": {
+        "file": "tests/models/test_url.py",
+        "line_start": 302,
+        "line_end": 304,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "New IPv6 test cases used parameters that didn't meaningfully exercise the code; reviewer corrected the test inputs."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "home-assistant_core_88276",
+      "label_index": 0,
+      "label": {
+        "file": "homeassistant/components/calendar/__init__.py",
+        "line_start": 389,
+        "line_end": 390,
+        "importance": "must_fix",
+        "category": "test_coverage",
+        "description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_23299",
+      "label_index": 0,
+      "label": {
+        "file": "sklearn/feature_selection/_from_model.py",
+        "line_start": 393,
+        "line_end": 393,
+        "importance": "nice_to_have",
+        "category": "maintainability",
+        "description": "The max_features validation logic was duplicated across fit and partial_fit. Reviewer suggested extracting it into a shared private method (_check_max_features) callable from both; author did so. Duplication cleanup on new code, suggested not gated."
+      },
+      "reason": "no bot finding overlapped this location"
+    },
+    {
+      "case_id": "scikit-learn_scikit-learn_33787",
+      "label_index": 1,
+      "label": {
+        "file": "sklearn/tests/test_pipeline.py",
+        "line_start": 2605,
+        "line_end": 2634,
+        "importance": "nice_to_have",
+        "category": "test_coverage",
+        "description": "Reviewer asked for additional test cases: callbacks set directly on steps without auto-propagation, without memory enabled, and exercising passthrough steps with non-empty callback lists. Tests were added."
+      },
+      "reason": "no bot finding overlapped this location"
+    }
+  ]
+}

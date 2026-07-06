@@ -1,8 +1,7 @@
 """LangGraph orchestration: fan out to the three specialists in parallel,
 merge their findings, then run the deterministic filter pipeline.
 
-The synthesizer (Week 4) will consume `filtered`; for now the graph's output
-is the cleaned, categorized findings list.
+
 """
 
 import operator

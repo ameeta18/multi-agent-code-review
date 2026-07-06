@@ -1,0 +1,30 @@
+{
+  "repo": "django/django",
+  "pr_number": 17730,
+  "url": "https://github.com/django/django/pull/17730",
+  "diff": "diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py\n--- a/django/db/models/expressions.py\n+++ b/django/db/models/expressions.py\n@@ -14,7 +14,7 @@\n from django.db.models.constants import LOOKUP_SEP\n from django.db.models.query_utils import Q\n from django.utils.deconstruct import deconstructible\n-from django.utils.functional import cached_property\n+from django.utils.functional import cached_property, classproperty\n from django.utils.hashable import make_hashable\n \n \n@@ -402,10 +402,13 @@ def relabeled_clone(self, change_map):\n         return clone\n \n     def replace_expressions(self, replacements):\n+        if not replacements:\n+            return self\n         if replacement := replacements.get(self):\n             return replacement\n+        if not (source_expressions := self.get_source_expressions()):\n+            return self\n         clone = self.copy()\n-        source_expressions = clone.get_source_expressions()\n         clone.set_source_expressions(\n             [\n                 expr.replace_expressions(replacements) if expr else None\n@@ -485,13 +488,18 @@ def select_format(self, compiler, sql, params):\n class Expression(BaseExpression, Combinable):\n     \"\"\"An expression that can be combined with other expressions.\"\"\"\n \n+    @classproperty\n+    @functools.lru_cache(maxsize=128)\n+    def _constructor_signature(cls):\n+        return inspect.signature(cls.__init__)\n+\n     @cached_property\n     def identity(self):\n-        constructor_signature = inspect.signature(self.__init__)\n         args, kwargs = self._constructor_args\n-        signature = constructor_signature.bind_partial(*args, **kwargs)\n+        signature = self._constructor_signature.bind_partial(self, *args, **kwargs)\n         signature.apply_defaults()\n-        arguments = signature.arguments.items()\n+        arguments = iter(signature.arguments.items())\n+        next(arguments)\n         identity = [self.__class__]\n         for arg, value in arguments:\n             if isinstance(value, fields.Field):\ndiff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py\n--- a/django/db/models/sql/query.py\n+++ b/django/db/models/sql/query.py\n@@ -972,6 +972,8 @@ def change_aliases(self, change_map):\n         relabelling any references to them in select columns and the where\n         clause.\n         \"\"\"\n+        if not change_map:\n+            return self\n         # If keys and values of change_map were to intersect, an alias might be\n         # updated twice (e.g. T4 -> T5, T5 -> T6, so also T4 -> T6) depending\n         # on their order in change_map.\ndiff --git a/django/db/models/sql/where.py b/django/db/models/sql/where.py\n--- a/django/db/models/sql/where.py\n+++ b/django/db/models/sql/where.py\n@@ -204,6 +204,8 @@ def relabel_aliases(self, change_map):\n         Relabel the alias values of any children. 'change_map' is a dictionary\n         mapping old (current) alias values to the new values.\n         \"\"\"\n+        if not change_map:\n+            return self\n         for pos, child in enumerate(self.children):\n             if hasattr(child, \"relabel_aliases\"):\n                 # For example another WhereNode\n@@ -225,6 +227,8 @@ def relabeled_clone(self, change_map):\n         return clone\n \n     def replace_expressions(self, replacements):\n+        if not replacements:\n+            return self\n         if replacement := replacements.get(self):\n             return replacement\n         clone = self.create(connector=self.connector, negated=self.negated)",
+  "labeled_issues": [
+    {
+      "file": "django/db/models/expressions.py",
+      "line_start": 501,
+      "line_end": 501,
+      "importance": "nice_to_have",
+      "category": "maintainability",
+      "description": "Building a temporary list for signature arguments was unnecessary; reviewer suggested iterating directly to avoid the allocation."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "charettes",
+      "file": "django/db/models/expressions.py",
+      "line": 501,
+      "body": "An alternative here would be\r\n\r\n```suggestion\r\n        arguments = iter(signature.arguments.items())\r\n        next(arguments)\r\n```\r\n\r\nTo avoid a temporary list creation and use the `dict_itemiterator` that would get created anyway in the loop below."
+    },
+    {
+      "author": "felixxm",
+      "file": "django/db/models/expressions.py",
+      "line": 501,
+      "body": "I think it's worth doing :+1: "
+    }
+  ]
+}

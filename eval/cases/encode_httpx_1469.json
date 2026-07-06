@@ -1,0 +1,24 @@
+{
+  "repo": "encode/httpx",
+  "pr_number": 1469,
+  "url": "https://github.com/encode/httpx/pull/1469",
+  "diff": "diff --git a/httpx/_transports/wsgi.py b/httpx/_transports/wsgi.py\n--- a/httpx/_transports/wsgi.py\n+++ b/httpx/_transports/wsgi.py\n@@ -74,6 +74,9 @@ def request(\n \n         scheme, host, port, full_path = url\n         path, _, query = full_path.partition(b\"?\")\n+        if port is None:\n+            port = {b\"http\": 80, b\"https\": 443}[scheme]\n+\n         environ = {\n             \"wsgi.version\": (1, 0),\n             \"wsgi.url_scheme\": scheme.decode(\"ascii\"),\ndiff --git a/tests/test_wsgi.py b/tests/test_wsgi.py\n--- a/tests/test_wsgi.py\n+++ b/tests/test_wsgi.py\n@@ -116,3 +116,30 @@ def test_wsgi_generator_empty():\n     response = client.get(\"http://www.example.org/\")\n     assert response.status_code == 200\n     assert response.text == \"\"\n+\n+\n+@pytest.mark.parametrize(\n+    \"url, expected_server_port\",\n+    [\n+        pytest.param(\"http://www.example.org\", \"80\", id=\"auto-http\"),\n+        pytest.param(\"https://www.example.org\", \"443\", id=\"auto-https\"),\n+        pytest.param(\"http://www.example.org:8000\", \"8000\", id=\"explicit-port\"),\n+    ],\n+)\n+def test_wsgi_server_port(url: str, expected_server_port: int):\n+    \"\"\"\n+    SERVER_PORT is populated correctly from the requested URL.\n+    \"\"\"\n+    hello_world_app = application_factory([b\"Hello, World!\"])\n+    server_port: str\n+\n+    def app(environ, start_response):\n+        nonlocal server_port\n+        server_port = environ[\"SERVER_PORT\"]\n+        return hello_world_app(environ, start_response)\n+\n+    client = httpx.Client(app=app)\n+    response = client.get(url)\n+    assert response.status_code == 200\n+    assert response.text == \"Hello, World!\"\n+    assert server_port == expected_server_port",
+  "labeled_issues": [
+    {
+      "file": "httpx/_transports/wsgi.py",
+      "line_start": 77,
+      "line_end": 77,
+      "importance": "must_fix",
+      "category": null,
+      "description": "WSGITransport did not compute the default port (80/443) when none was given, so SERVER_PORT would be incorrect for default-port URLs."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "florimondmanca",
+      "file": "httpx/_transports/wsgi.py",
+      "line": 90,
+      "body": "I believe we need to handle HTTP (80) vs HTTPS (443). So let's properly compute the default port separately higher up this method\u2026?\r\n\r\n```python\r\nif port is None:\r\n    port = {b\"http\": 80, b\"https\": 443}[scheme]\r\n```"
+    }
+  ]
+}

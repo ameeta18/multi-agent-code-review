@@ -1,8 +1,6 @@
 """The single boundary between this project and the GitHub API.
 
-Nothing else imports PyGithub directly. Keeping all GitHub I/O here means
-the rest of the codebase stays pure and testable, and this one function is
-the only thing we mock in tests.
+
 """
 
 from github import Auth, Github

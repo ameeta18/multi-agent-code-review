@@ -1,9 +1,6 @@
 """The shared schema every specialist agent must conform to.
 
-Single source of truth for what a 'finding' looks like. Each specialist's
-raw LLM output is validated against this before any filter or the
-synthesizer is allowed to use it. Malformed output fails loudly here
-instead of silently corrupting the review downstream.
+
 """
 
 from enum import StrEnum

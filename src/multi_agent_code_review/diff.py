@@ -1,9 +1,5 @@
 """Parse unified diffs to learn which lines a change actually touched.
 
-Used by the "drop findings outside the diff" filter and, later, by the
-orchestration layer's diff parser. We rely on the `unidiff` library rather
-than hand-rolling hunk parsing: unified-diff edge cases (new files, multiple
-hunks, deletions, line-count arithmetic) are easy to get subtly wrong.
 """
 
 from unidiff import PatchSet

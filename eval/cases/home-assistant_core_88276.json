@@ -1,0 +1,36 @@
+{
+  "repo": "home-assistant/core",
+  "pr_number": 88276,
+  "url": "https://github.com/home-assistant/core/pull/88276",
+  "diff": "diff --git a/homeassistant/components/calendar/__init__.py b/homeassistant/components/calendar/__init__.py\n--- a/homeassistant/components/calendar/__init__.py\n+++ b/homeassistant/components/calendar/__init__.py\n@@ -386,6 +386,8 @@ async def get(self, request: web.Request, entity_id: str) -> web.Response:\n             return web.Response(status=HTTPStatus.BAD_REQUEST)\n         if start_date is None or end_date is None:\n             return web.Response(status=HTTPStatus.BAD_REQUEST)\n+        if start_date > end_date:\n+            return web.Response(status=HTTPStatus.BAD_REQUEST)\n \n         try:\n             calendar_event_list = await entity.async_get_events(\ndiff --git a/tests/components/calendar/test_init.py b/tests/components/calendar/test_init.py\n--- a/tests/components/calendar/test_init.py\n+++ b/tests/components/calendar/test_init.py\n@@ -28,9 +28,7 @@ async def test_events_http_api(\n     start = dt_util.now()\n     end = start + timedelta(days=1)\n     response = await client.get(\n-        \"/api/calendars/calendar.calendar_1?start={}&end={}\".format(\n-            start.isoformat(), end.isoformat()\n-        )\n+        f\"/api/calendars/calendar.calendar_1?start={start.isoformat()}&end={end.isoformat()}\"\n     )\n     assert response.status == HTTPStatus.OK\n     events = await response.json()\n@@ -63,14 +61,27 @@ async def test_events_http_api_error(\n         side_effect=HomeAssistantError(\"Failure\"),\n     ):\n         response = await client.get(\n-            \"/api/calendars/calendar.calendar_1?start={}&end={}\".format(\n-                start.isoformat(), end.isoformat()\n-            )\n+            f\"/api/calendars/calendar.calendar_1?start={start.isoformat()}&end={end.isoformat()}\"\n         )\n         assert response.status == HTTPStatus.INTERNAL_SERVER_ERROR\n         assert await response.json() == {\"message\": \"Error reading events: Failure\"}\n \n \n+async def test_events_http_api_dates_wrong_order(\n+    hass: HomeAssistant, hass_client: ClientSessionGenerator\n+) -> None:\n+    \"\"\"Test the calendar demo view.\"\"\"\n+    await async_setup_component(hass, \"calendar\", {\"calendar\": {\"platform\": \"demo\"}})\n+    await hass.async_block_till_done()\n+    client = await hass_client()\n+    start = dt_util.now()\n+    end = start + timedelta(days=-1)\n+    response = await client.get(\n+        f\"/api/calendars/calendar.calendar_1?start={start.isoformat()}&end={end.isoformat()}\"\n+    )\n+    assert response.status == HTTPStatus.BAD_REQUEST\n+\n+\n async def test_calendars_http_api(\n     hass: HomeAssistant, hass_client: ClientSessionGenerator\n ) -> None:",
+  "labeled_issues": [
+    {
+      "file": "homeassistant/components/calendar/__init__.py",
+      "line_start": 389,
+      "line_end": 390,
+      "importance": "must_fix",
+      "category": "test_coverage",
+      "description": "New start_date > end_date validation in the calendar HTTP API had no test; maintainer required a test for this case before merge given the component's central role. Test was added."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "frenck",
+      "file": "homeassistant/components/calendar/__init__.py",
+      "line": 390,
+      "body": "This is a Core entity component, considering its central role, please add tests for this case.\r\n\r\n../Frenck"
+    },
+    {
+      "author": "frenck",
+      "file": "tests/components/calendar/test_init.py",
+      "line": 86,
+      "body": "Please use f-strings instead of format()"
+    },
+    {
+      "author": "albinmedoc",
+      "file": "tests/components/calendar/test_init.py",
+      "line": 86,
+      "body": "Okey, should I change the other calendar tests as well? I just used the same as the others."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+"""Evaluation harness: labeled cases, scoring, and benchmark runners."""

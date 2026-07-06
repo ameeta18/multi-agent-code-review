@@ -1,0 +1,54 @@
+{
+  "repo": "apache/airflow",
+  "pr_number": 63530,
+  "url": "https://github.com/apache/airflow/pull/63530",
+  "diff": "diff --git a/providers/mysql/src/airflow/providers/mysql/hooks/mysql.py b/providers/mysql/src/airflow/providers/mysql/hooks/mysql.py\n--- a/providers/mysql/src/airflow/providers/mysql/hooks/mysql.py\n+++ b/providers/mysql/src/airflow/providers/mysql/hooks/mysql.py\n@@ -342,8 +342,10 @@ def bulk_load_custom(\n         conn = self.get_conn()\n         cursor = conn.cursor()\n \n-        sql_statement = f\"LOAD DATA LOCAL INFILE %s %s INTO TABLE `{table}` %s\"\n-        parameters = (tmp_file, duplicate_key_handling, extra_options)\n+        sql_statement = (\n+            f\"LOAD DATA LOCAL INFILE %s {duplicate_key_handling} INTO TABLE `{table}` {extra_options}\"\n+        )\n+        parameters = (tmp_file,)\n         cursor.execute(\n             sql_statement,\n             parameters,\ndiff --git a/providers/mysql/tests/unit/mysql/hooks/test_mysql.py b/providers/mysql/tests/unit/mysql/hooks/test_mysql.py\n--- a/providers/mysql/tests/unit/mysql/hooks/test_mysql.py\n+++ b/providers/mysql/tests/unit/mysql/hooks/test_mysql.py\n@@ -506,14 +506,11 @@ def test_bulk_load_custom(self, table):\n             IGNORE 1 LINES\"\"\",\n         )\n         self.cur.execute.assert_called_once_with(\n-            f\"LOAD DATA LOCAL INFILE %s %s INTO TABLE `{table}` %s\",\n-            (\n-                \"/tmp/file\",\n-                \"IGNORE\",\n-                \"\"\"FIELDS TERMINATED BY ';'\n-            OPTIONALLY ENCLOSED BY '\"'\n-            IGNORE 1 LINES\"\"\",\n-            ),\n+            f\"LOAD DATA LOCAL INFILE %s IGNORE INTO TABLE `{table}` \"\n+            \"FIELDS TERMINATED BY ';'\\n\"\n+            \"            OPTIONALLY ENCLOSED BY '\\\"'\\n\"\n+            \"            IGNORE 1 LINES\",\n+            (\"/tmp/file\",),\n         )\n \n     @mock.patch(\"airflow.providers.mysql.hooks.mysql.send_sql_hook_lineage\")\n@@ -527,14 +524,39 @@ def test_bulk_load_custom_hook_lineage(self, mock_send_lineage):\n         mock_send_lineage.assert_called_once()\n         call_kw = mock_send_lineage.call_args.kwargs\n         assert call_kw[\"context\"] is self.db_hook\n-        assert call_kw[\"sql\"] == \"LOAD DATA LOCAL INFILE %s %s INTO TABLE `table` %s\"\n-        assert call_kw[\"sql_parameters\"] == (\"/tmp/file\", \"IGNORE\", \"FIELDS TERMINATED BY ';'\")\n+        assert (\n+            call_kw[\"sql\"] == \"LOAD DATA LOCAL INFILE %s IGNORE INTO TABLE `table` FIELDS TERMINATED BY ';'\"\n+        )\n+        assert call_kw[\"sql_parameters\"] == (\"/tmp/file\",)\n         assert call_kw[\"cur\"] is self.cur\n \n     def test_reserved_words(self):\n         hook = MySqlHook()\n         assert hook.reserved_words == sqlalchemy.dialects.mysql.reserved_words.RESERVED_WORDS_MYSQL\n \n+    @pytest.mark.parametrize(\n+        (\"duplicate_key_handling\", \"extra_options\"),\n+        [\n+            (\"IGNORE\", \"FIELDS TERMINATED BY ','\"),\n+            (\"REPLACE\", \"FIELDS TERMINATED BY '\\\\t'\"),\n+        ],\n+    )\n+    def test_bulk_load_custom_duplicate_key_not_parameterized(self, duplicate_key_handling, extra_options):\n+        \"\"\"Test that duplicate_key_handling and extra_options appear as SQL keywords, not parameterized values.\"\"\"\n+        self.db_hook.bulk_load_custom(\n+            \"test_table\",\n+            \"/tmp/test_file\",\n+            duplicate_key_handling,\n+            extra_options,\n+        )\n+        call_args = self.cur.execute.call_args\n+        sql_statement = call_args[0][0]\n+        parameters = call_args[0][1]\n+\n+        assert duplicate_key_handling in sql_statement\n+        assert extra_options in sql_statement\n+        assert parameters == (\"/tmp/test_file\",)\n+\n     def test_generate_insert_sql_without_already_escaped_column_name(self):\n         values = [\n             \"1\",",
+  "labeled_issues": [
+    {
+      "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+      "line_start": 346,
+      "line_end": 346,
+      "importance": "nice_to_have",
+      "category": "security",
+      "description": "duplicate_key_handling and extra_options are interpolated directly into the LOAD DATA SQL string with no validation, leaving an opening to inject arbitrary SQL keywords; reviewer flagged restricting duplicate_key_handling to IGNORE/REPLACE but explicitly deferred it to a follow-up PR, so it did not block merge."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "SameerMesiah97",
+      "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+      "line": 348,
+      "body": "I think `duplicate_key_handling` here could benefit from validation (must be `IGNORE` or `REPLACE`) to prevent the injection of destructive SQL statements i.e. DROP TABLE. But this depends on whether the MySQL driver being used here can accept multiple statements. No need to add this to the current PR but this would be a solid rationale for a follow-up PR. "
+    },
+    {
+      "author": "SameerMesiah97",
+      "file": "providers/mysql/tests/unit/mysql/hooks/test_mysql.py",
+      "line": 513,
+      "body": "I would fix the spacing here if you can. It looks a bit odd."
+    },
+    {
+      "author": "majiayu000",
+      "file": "providers/mysql/tests/unit/mysql/hooks/test_mysql.py",
+      "line": 513,
+      "body": "Fixed \u2014 removed the unnecessary wrapping parentheses to clean up the assertion formatting."
+    },
+    {
+      "author": "majiayu000",
+      "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+      "line": 348,
+      "body": "Good point \u2014 agreed that validating `duplicate_key_handling` to only accept `IGNORE` or `REPLACE` would be a solid follow-up. I'll open a separate PR for that."
+    },
+    {
+      "author": "majiayu000",
+      "file": "providers/mysql/tests/unit/mysql/hooks/test_mysql.py",
+      "line": 513,
+      "body": "Fixed in a previous commit \u2014 removed the unnecessary wrapping parentheses to clean up the assertion formatting."
+    },
+    {
+      "author": "majiayu000",
+      "file": "providers/mysql/src/airflow/providers/mysql/hooks/mysql.py",
+      "line": 348,
+      "body": "Good point \u2014 agreed that validating `duplicate_key_handling` to only accept `IGNORE` or `REPLACE` would be a solid follow-up. I'll open a separate PR for that."
+    }
+  ]
+}

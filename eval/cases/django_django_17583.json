@@ -1,0 +1,68 @@
+{
+  "repo": "django/django",
+  "pr_number": 17583,
+  "url": "https://github.com/django/django/pull/17583",
+  "diff": "diff --git a/django/db/models/base.py b/django/db/models/base.py\n--- a/django/db/models/base.py\n+++ b/django/db/models/base.py\n@@ -781,7 +781,11 @@ def save(\n         if force_insert and (force_update or update_fields):\n             raise ValueError(\"Cannot force both insert and updating in model saving.\")\n \n-        deferred_fields = self.get_deferred_fields()\n+        deferred_non_generated_fields = {\n+            f.attname\n+            for f in self._meta.concrete_fields\n+            if f.attname not in self.__dict__ and f.generated is False\n+        }\n         if update_fields is not None:\n             # If update_fields is empty, skip the save. We do also check for\n             # no-op saves later on for inheritance cases. This bailout is\n@@ -802,12 +806,16 @@ def save(\n \n         # If saving to the same database, and this model is deferred, then\n         # automatically do an \"update_fields\" save on the loaded fields.\n-        elif not force_insert and deferred_fields and using == self._state.db:\n+        elif (\n+            not force_insert\n+            and deferred_non_generated_fields\n+            and using == self._state.db\n+        ):\n             field_names = set()\n             for field in self._meta.concrete_fields:\n                 if not field.primary_key and not hasattr(field, \"through\"):\n                     field_names.add(field.attname)\n-            loaded_fields = field_names.difference(deferred_fields)\n+            loaded_fields = field_names.difference(deferred_non_generated_fields)\n             if loaded_fields:\n                 update_fields = frozenset(loaded_fields)\n \ndiff --git a/docs/releases/5.0.1.txt b/docs/releases/5.0.1.txt\n--- a/docs/releases/5.0.1.txt\n+++ b/docs/releases/5.0.1.txt\n@@ -16,3 +16,7 @@ Bugfixes\n * Fixed a long standing bug in handling the ``RETURNING INTO`` clause that\n   caused a crash when creating a model instance with a ``GeneratedField`` which\n   ``output_field`` had backend-specific converters (:ticket:`35024`).\n+\n+* Fixed a regression in Django 5.0 that caused a crash of ``Model.save()`` for\n+  models with both ``GeneratedField`` and ``ForeignKey`` fields\n+  (:ticket:`35019`).\ndiff --git a/tests/model_fields/models.py b/tests/model_fields/models.py\n--- a/tests/model_fields/models.py\n+++ b/tests/model_fields/models.py\n@@ -502,6 +502,7 @@ class GeneratedModel(models.Model):\n         output_field=models.IntegerField(),\n         db_persist=True,\n     )\n+    fk = models.ForeignKey(Foo, on_delete=models.CASCADE, null=True)\n \n     class Meta:\n         required_db_features = {\"supports_stored_generated_columns\"}\n@@ -515,6 +516,7 @@ class GeneratedModelVirtual(models.Model):\n         output_field=models.IntegerField(),\n         db_persist=False,\n     )\n+    fk = models.ForeignKey(Foo, on_delete=models.CASCADE, null=True)\n \n     class Meta:\n         required_db_features = {\"supports_virtual_generated_columns\"}\ndiff --git a/tests/model_fields/test_generatedfield.py b/tests/model_fields/test_generatedfield.py\n--- a/tests/model_fields/test_generatedfield.py\n+++ b/tests/model_fields/test_generatedfield.py\n@@ -1,4 +1,5 @@\n import uuid\n+from decimal import Decimal\n \n from django.apps import apps\n from django.db import IntegrityError, connection\n@@ -15,6 +16,7 @@\n from django.test.utils import isolate_apps\n \n from .models import (\n+    Foo,\n     GeneratedModel,\n     GeneratedModelFieldWithConverters,\n     GeneratedModelNull,\n@@ -187,6 +189,19 @@ def test_save(self):\n         m.refresh_from_db()\n         self.assertEqual(m.field, 8)\n \n+    def test_save_model_with_foreign_key(self):\n+        fk_object = Foo.objects.create(a=\"abc\", d=Decimal(\"12.34\"))\n+        m = self.base_model(a=1, b=2, fk=fk_object)\n+        m.save()\n+        m = self._refresh_if_needed(m)\n+        self.assertEqual(m.field, 3)\n+\n+    def test_generated_fields_can_be_deferred(self):\n+        fk_object = Foo.objects.create(a=\"abc\", d=Decimal(\"12.34\"))\n+        m = self.base_model.objects.create(a=1, b=2, fk=fk_object)\n+        m = self.base_model.objects.defer(\"field\").get(id=m.id)\n+        self.assertEqual(m.get_deferred_fields(), {\"field\"})\n+\n     def test_update(self):\n         m = self.base_model.objects.create(a=1, b=2)\n         self.base_model.objects.update(b=3)",
+  "labeled_issues": [
+    {
+      "file": "django/db/models/base.py",
+      "line_start": 784,
+      "line_end": 784,
+      "importance": "must_fix",
+      "category": null,
+      "description": "Initial fix used get_deferred_fields(), which would incorrectly treat explicitly-deferred generated fields as needing refresh, breaking refresh_from_db() for deferred fields. Needed a save-specific set excluding generated fields."
+    },
+    {
+      "file": "tests/model_fields/models.py",
+      "line_start": 505,
+      "line_end": 505,
+      "importance": "nice_to_have",
+      "category": "test_coverage",
+      "description": "New test model with required_db_features would crash on databases without GeneratedField support; reviewer asked to add nullable FKs to existing models instead."
+    }
+  ],
+  "reviewer_comments": [
+    {
+      "author": "charettes",
+      "file": "django/db/models/base.py",
+      "line": 672,
+      "body": "I think this fails to account for cases where a generated field is explicit deferred.\r\n\r\nFor example,\r\n\r\n```python\r\nsquare = Square.objects.defer(\"area\").get(pk=square_pk)\r\nassert \"area\" in square.get_deferred_fields()\r\n```"
+    },
+    {
+      "author": "charettes",
+      "file": "django/db/models/base.py",
+      "line": 672,
+      "body": "Concretely it could break things like\r\n\r\n```python\r\nsquare = Square.objects.defer(\"area\").get(pk=square_pk)\r\nsquare.refresh_from_db()\r\n```\r\n\r\nAs now `area` would be refreshed from db while deferred fields normally aren't."
+    },
+    {
+      "author": "charettes",
+      "file": "django/db/models/base.py",
+      "line": 672,
+      "body": "It looks like the right injection point but I think we need a specialized version that exclude generated fields for the `Model.save` purpose."
+    },
+    {
+      "author": "LilyFirefly",
+      "file": "tests/model_fields/test_generatedfield.py",
+      "line": 279,
+      "body": "```suggestion\r\n    def test_generated_fields_can_be_deferred(self):\r\n```"
+    },
+    {
+      "author": "charettes",
+      "file": "docs/releases/5.0.1.txt",
+      "line": 17,
+      "body": "and  `GeneratedField`?"
+    },
+    {
+      "author": "sarahboyce",
+      "file": "docs/releases/5.0.1.txt",
+      "line": 17,
+      "body": "Ah yes \ud83e\udd26\u200d\u2640\ufe0f "
+    },
+    {
+      "author": "felixxm",
+      "file": "tests/model_fields/models.py",
+      "line": 590,
+      "body": "This will crash on databases without support for `GeneratedField`:\r\n```\r\nclass Meta:\r\n    required_db_features = {\"supports_stored_generated_columns\"}\r\n```\r\nCan we instead add nullable foreign keys to existing models? (e.g.  `GeneratedModel` and `GeneratedModelVirtual`.)"
+    }
+  ]
+}
